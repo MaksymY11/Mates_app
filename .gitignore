@@ -1,0 +1,37 @@
+# Flutter/Dart/Pub
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+pubspec.lock
+
+# Build outputs
+build/
+ios/Pods/
+.ios/Flutter/Flutter.framework
+.ios/Flutter/Flutter.podspec
+.android/
+
+# VS Code settings
+.vscode/
+
+# Android Studio settings
+.idea/
+*.iml
+
+# Gradle
+.gradle/
+/android/**/local.properties
+/android/.gradle/
+/android/app/**/generated/
+
+# Xcode
+*.xcworkspace
+*.xcuserstate
+*.xcuserdatad/
+/ios/Flutter/Generated.xcconfig
+
+# Misc
+*.log
+*.lock
+.metadata
