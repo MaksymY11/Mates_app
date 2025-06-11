@@ -1,0 +1,6 @@
+[build]
+  functions = "functions"
+  publish = "build/web"
+  
+[dev]
+  functions = "functions"
