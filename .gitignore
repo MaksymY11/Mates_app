@@ -35,3 +35,6 @@ ios/Pods/
 *.log
 *.lock
 .metadata
+
+# Local Netlify folder
+.netlify

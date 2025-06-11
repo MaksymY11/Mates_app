@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'services/auth_service.dart';
+import 'utils/validators.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -22,35 +24,6 @@ class _SignUpPageState extends State<SignUpPage> {
     super.dispose();
   }
 
-  String? _validateEmail(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Please enter your email';
-    }
-    final emailRegex = RegExp(r"^[^@\s]+@[^@\s]+\.[^@\s]+$");
-    if (!emailRegex.hasMatch(value)) {
-      return 'Please enter a valid email address';
-    }
-    return null;
-  }
-
-  String? _validatePassword(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Please create a password';
-    }
-    if (value.length < 8) {
-      return 'Password must be at least 8 characters';
-    }
-    final upper = RegExp(r'[A-Z]');
-    final lower = RegExp(r'[a-z]');
-    final digit = RegExp(r'\d');
-    if (!upper.hasMatch(value) ||
-        !lower.hasMatch(value) ||
-        !digit.hasMatch(value)) {
-      return 'Use upper, lower case letters & a number';
-    }
-    return null;
-  }
-
   String? _confirmPassword(String? value) {
     if (value == null || value.isEmpty) {
       return 'Please confirm your password';
@@ -61,12 +34,23 @@ class _SignUpPageState extends State<SignUpPage> {
     return null;
   }
 
-  void _submit() {
+  void _submit() async {
     if (_formKey.currentState?.validate() ?? false) {
       // Form is valid; proceed with sign-up logic
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Creating your account...')));
+      try {
+        await AuthService.registerUser(
+          _emailController.text,
+          _passwordController.text,
+        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('User registered!')));
+        Navigator.pop(context);
+      } catch (e) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
     }
   }
 
@@ -126,7 +110,7 @@ class _SignUpPageState extends State<SignUpPage> {
                       ),
                     ),
                     keyboardType: TextInputType.emailAddress,
-                    validator: _validateEmail,
+                    validator: Validators.validateEmail,
                   ),
                   const SizedBox(height: 16),
 
@@ -147,7 +131,7 @@ class _SignUpPageState extends State<SignUpPage> {
                         borderSide: BorderSide.none,
                       ),
                     ),
-                    validator: _validatePassword,
+                    validator: Validators.validatePassword,
                   ),
                   const SizedBox(height: 16),
 

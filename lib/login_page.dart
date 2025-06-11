@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'signup_page.dart';
+import 'services/auth_service.dart';
+import 'utils/validators.dart';
 
 class LoginPage extends StatelessWidget {
-  const LoginPage({super.key});
+  LoginPage({super.key});
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +52,8 @@ class LoginPage extends StatelessWidget {
                     const SizedBox(height: 32),
 
                     // Email/Username field
-                    TextField(
+                    TextFormField(
+                      controller: _emailController,
                       decoration: InputDecoration(
                         hintText: 'Email or username',
                         filled: true,
@@ -62,11 +67,13 @@ class LoginPage extends StatelessWidget {
                           borderSide: BorderSide.none,
                         ),
                       ),
+                      validator: Validators.validateEmail,
                     ),
                     const SizedBox(height: 16),
 
                     // Password field
-                    TextField(
+                    TextFormField(
+                      controller: _passwordController,
                       obscureText: true,
                       decoration: InputDecoration(
                         hintText: 'Password',
@@ -81,13 +88,35 @@ class LoginPage extends StatelessWidget {
                           borderSide: BorderSide.none,
                         ),
                       ),
+                      validator: Validators.validatePassword,
                     ),
                     const SizedBox(height: 20),
+
+                    // Continue button (log in)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         ElevatedButton(
-                          onPressed: () {},
+                          onPressed: () async {
+                            try {
+                              String token = await AuthService.loginUser(
+                                _emailController.text,
+                                _passwordController.text,
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Login successful! Token: $token',
+                                  ),
+                                ),
+                              );
+                              //TODO navigate to home page
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Login failed: $e')),
+                              );
+                            }
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF7CFF7C),
                             shape: RoundedRectangleBorder(
