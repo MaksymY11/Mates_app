@@ -11,7 +11,7 @@ class AuthService {
       body: jsonEncode({'email': email, 'password': password}),
     );
 
-    if (response.statusCode == 200) {
+    if (response.statusCode == 200 || response.statusCode == 201) {
       return "Success";
     } else {
       throw Exception('Failed to register: ${response.body}');
@@ -26,9 +26,20 @@ class AuthService {
     );
 
     if (response.statusCode == 200) {
-      return jsonDecode(response.body)['token'];
+      final Map<String, dynamic> body = jsonDecode(response.body);
+      final token = body['access_token'];
+      if (token == null) {
+        throw Exception('Login Failed: access_token missing');
+      }
+      return token;
     } else {
-      throw Exception('Failed to login: ${response.body}');
+      try {
+        final Map<String, dynamic> body = jsonDecode(response.body);
+        final detail = body['detail'] ?? 'Unknown error';
+        throw Exception('Failed to login: $detail');
+      } catch (e) {
+        throw Exception('Failed to parse error response: $e');
+      }
     }
   }
 }
