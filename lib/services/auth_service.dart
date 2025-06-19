@@ -2,8 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  static const String baseUrl =
-      'https://6848cad2942c78ae66042532--lovely-mochi-170b16.netlify.app/';
+  static const String baseUrl = 'https://mates-backend-dxma.onrender.com';
 
   static Future<String> registerUser(String email, String password) async {
     final response = await http.post(
