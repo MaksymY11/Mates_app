@@ -5,9 +5,10 @@ import 'package:url_launcher/url_launcher.dart';
 class LandingPage extends StatelessWidget {
   const LandingPage({Key? key}) : super(key: key);
 
-  Future<void> _launchStore(String url) async {
-    if (await canLaunch(url)) {
-      await launch(url);
+  Future<void> _launchStore(String urlString) async {
+    final uri = Uri.parse(urlString);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
