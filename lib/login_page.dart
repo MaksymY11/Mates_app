@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'signup_page.dart';
 import 'services/auth_service.dart';
 import 'utils/validators.dart';
+import 'home_page.dart';
 
 class LoginPage extends StatelessWidget {
   LoginPage({super.key});
@@ -103,6 +104,7 @@ class LoginPage extends StatelessWidget {
                                 _emailController.text,
                                 _passwordController.text,
                               );
+                              // ignore: use_build_context_synchronously
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
@@ -110,8 +112,15 @@ class LoginPage extends StatelessWidget {
                                   ),
                                 ),
                               );
-                              //TODO navigate to home page
+                              if (context.mounted) return;
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (_) => const HomeShell(),
+                                ),
+                                (route) => false,
+                              );
                             } catch (e) {
+                              // ignore: use_build_context_synchronously
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(content: Text('Login failed: $e')),
                               );
