@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'signup_page.dart';
 import 'services/auth_service.dart';
 import 'utils/validators.dart';
@@ -104,14 +105,11 @@ class LoginPage extends StatelessWidget {
                                 _emailController.text,
                                 _passwordController.text,
                               );
-                              // ignore: use_build_context_synchronously
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Login successful! Token: $token',
-                                  ),
-                                ),
-                              );
+                              // saving token to secure storage for later use
+                              final prefs =
+                                  await SharedPreferences.getInstance();
+                              await prefs.setString('auth_token', token);
+
                               if (context.mounted) return;
                               Navigator.of(context).pushAndRemoveUntil(
                                 MaterialPageRoute(
