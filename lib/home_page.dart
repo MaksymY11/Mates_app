@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 /// Entry point for logged-in users.
 /// Shows a bottom nav with 5 tabs; the center (index 2) is the Home/Profiles feed.
 class HomeShell extends StatefulWidget {
-  const HomeShell({Key? key}) : super(key: key);
+  const HomeShell({super.key});
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -60,7 +60,6 @@ class _BottomNav extends StatelessWidget {
   final Color unselectedColor;
 
   const _BottomNav({
-    Key? key,
     required this.currentIndex,
     required this.onTap,
     required this.items,
@@ -68,7 +67,7 @@ class _BottomNav extends StatelessWidget {
     this.unselectedScale = 1.0,
     this.selectedColor = Colors.blue,
     this.unselectedColor = Colors.black54,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -124,7 +123,7 @@ class _BottomNavItem {
 
 /// Center tab: show other user profiles as cards.
 class HomeFeedPage extends StatelessWidget {
-  const HomeFeedPage({Key? key}) : super(key: key);
+  const HomeFeedPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -180,7 +179,7 @@ class _Profile {
 
 class _ProfileCard extends StatelessWidget {
   final _Profile profile;
-  const _ProfileCard({Key? key, required this.profile}) : super(key: key);
+  const _ProfileCard({required this.profile});
 
   @override
   Widget build(BuildContext context) {
@@ -253,28 +252,28 @@ class _ProfileCard extends StatelessWidget {
 }
 
 class MatchingPage extends StatelessWidget {
-  const MatchingPage({Key? key}) : super(key: key);
+  const MatchingPage({super.key});
   @override
   Widget build(BuildContext context) =>
       const _CenterLabel(icon: Icons.favorite, label: 'Matching');
 }
 
 class ChatsPage extends StatelessWidget {
-  const ChatsPage({Key? key}) : super(key: key);
+  const ChatsPage({super.key});
   @override
   Widget build(BuildContext context) =>
       const _CenterLabel(icon: Icons.chat_bubble_rounded, label: 'Chats');
 }
 
 class NotificationsPage extends StatelessWidget {
-  const NotificationsPage({Key? key}) : super(key: key);
+  const NotificationsPage({super.key});
   @override
   Widget build(BuildContext context) =>
       const _CenterLabel(icon: Icons.notifications, label: 'Notifications');
 }
 
 class ProfilePage extends StatelessWidget {
-  const ProfilePage({Key? key}) : super(key: key);
+  const ProfilePage({super.key});
   @override
   Widget build(BuildContext context) =>
       const _CenterLabel(icon: Icons.person, label: 'Profile');
@@ -283,8 +282,7 @@ class ProfilePage extends StatelessWidget {
 class _CenterLabel extends StatelessWidget {
   final IconData icon;
   final String label;
-  const _CenterLabel({Key? key, required this.icon, required this.label})
-    : super(key: key);
+  const _CenterLabel({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) => Center(

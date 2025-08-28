@@ -5,10 +5,55 @@ import 'services/auth_service.dart';
 import 'utils/validators.dart';
 import 'home_page.dart';
 
-class LoginPage extends StatelessWidget {
+class LoginPage extends StatefulWidget {
   LoginPage({super.key});
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleLogin() async {
+    // Run Validators if present
+    if (_formKey.currentState?.validate() == false) return;
+
+    setState(() => _loading = true);
+    try {
+      final token = await AuthService.loginUser(
+        _emailController.text,
+        _passwordController.text,
+      );
+
+      // Save token to secure storage for later use
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('auth_token', token);
+
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomeShell()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Login failed: $e')));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,31 +144,7 @@ class LoginPage extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         ElevatedButton(
-                          onPressed: () async {
-                            try {
-                              String token = await AuthService.loginUser(
-                                _emailController.text,
-                                _passwordController.text,
-                              );
-                              // saving token to secure storage for later use
-                              final prefs =
-                                  await SharedPreferences.getInstance();
-                              await prefs.setString('auth_token', token);
-
-                              if (context.mounted) return;
-                              Navigator.of(context).pushAndRemoveUntil(
-                                MaterialPageRoute(
-                                  builder: (_) => const HomeShell(),
-                                ),
-                                (route) => false,
-                              );
-                            } catch (e) {
-                              // ignore: use_build_context_synchronously
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Login failed: $e')),
-                              );
-                            }
-                          },
+                          onPressed: _loading ? null : _handleLogin,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF7CFF7C),
                             shape: RoundedRectangleBorder(
@@ -132,10 +153,22 @@ class LoginPage extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             elevation: 0,
                           ),
-                          child: const Text(
-                            'Continue',
-                            style: TextStyle(color: Colors.black, fontSize: 10),
-                          ),
+                          child:
+                              _loading
+                                  ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : Text(
+                                    'Continue',
+                                    style: TextStyle(
+                                      color: Colors.black,
+                                      fontSize: 10,
+                                    ),
+                                  ),
                         ),
                       ],
                     ),

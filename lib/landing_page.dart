@@ -3,7 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 /// A scrollable landing page for Mates.
 class LandingPage extends StatelessWidget {
-  const LandingPage({Key? key}) : super(key: key);
+  const LandingPage({super.key});
 
   Future<void> _launchStore(String urlString) async {
     final uri = Uri.parse(urlString);
@@ -301,12 +301,12 @@ class FeatureBox extends StatelessWidget {
   final Color primaryColor;
 
   const FeatureBox({
-    Key? key,
+    super.key,
     required this.icon,
     required this.title,
     required this.description,
     required this.primaryColor,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
