@@ -15,15 +15,17 @@ class _HomeShellState extends State<HomeShell> {
 
   // Keep pages alive with an IndexedStack
   late final List<Widget> _pages = const [
-    MatchingPage(), // 0
-    ChatsPage(), // 1
-    HomeFeedPage(), // 2 (center)
-    NotificationsPage(), // 3 (optional; swap for something else if you like)
-    ProfilePage(), // 4
+    MatchingPage(),
+    ChatsPage(),
+    HomeFeedPage(), // center
+    NotificationsPage(),
+    ProfilePage(),
   ];
 
   @override
   Widget build(BuildContext context) {
+    final brand = Theme.of(context).colorScheme.primary;
+
     return Scaffold(
       body: IndexedStack(index: _currentIndex, children: _pages),
       bottomNavigationBar: _BottomNav(
@@ -39,10 +41,9 @@ class _HomeShellState extends State<HomeShell> {
           _BottomNavItem(icon: Icons.notifications, semanticLabel: 'Alerts'),
           _BottomNavItem(icon: Icons.person, semanticLabel: 'Profile'),
         ],
-        // tweak these to taste
         selectedScale: 1.25,
         unselectedScale: 1.0,
-        selectedColor: Colors.deepPurple,
+        selectedColor: brand,
         unselectedColor: Colors.black54,
       ),
     );
@@ -65,19 +66,21 @@ class _BottomNav extends StatelessWidget {
     required this.items,
     this.selectedScale = 1.2,
     this.unselectedScale = 1.0,
-    this.selectedColor = Colors.blue,
-    this.unselectedColor = Colors.black54,
+    required this.selectedColor,
+    required this.unselectedColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Option A: no gap at bottom
     return SafeArea(
       top: false,
+      bottom: false, // prevents extra padding at the bottom
       child: Container(
         height: 64,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
               color: Colors.black12,
               blurRadius: 8,
@@ -127,7 +130,9 @@ class HomeFeedPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Mock profiles; wire to your backend later
+    final brand = Theme.of(context).colorScheme.primary;
+
+    // Mock profiles
     final profiles = [
       const _Profile(
         name: 'Ava',
@@ -157,7 +162,8 @@ class HomeFeedPage extends StatelessWidget {
 
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-      itemBuilder: (context, i) => _ProfileCard(profile: profiles[i]),
+      itemBuilder:
+          (context, i) => _ProfileCard(profile: profiles[i], brand: brand),
       separatorBuilder: (_, __) => const SizedBox(height: 16),
       itemCount: profiles.length,
     );
@@ -179,7 +185,8 @@ class _Profile {
 
 class _ProfileCard extends StatelessWidget {
   final _Profile profile;
-  const _ProfileCard({required this.profile});
+  final Color brand;
+  const _ProfileCard({required this.profile, required this.brand});
 
   @override
   Widget build(BuildContext context) {
@@ -196,19 +203,14 @@ class _ProfileCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              // Placeholder avatar (replace with profile.photoUrl if you have it)
               Container(
                 width: 64,
                 height: 64,
                 decoration: BoxDecoration(
-                  color: Colors.deepPurple.shade50,
+                  color: brand.withOpacity(0.15),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.person,
-                  size: 36,
-                  color: Colors.deepPurple,
-                ),
+                child: Icon(Icons.person, size: 36, color: brand),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -239,6 +241,7 @@ class _ProfileCard extends StatelessWidget {
               const SizedBox(width: 8),
               IconButton(
                 icon: const Icon(Icons.favorite_border),
+                color: brand,
                 onPressed: () {
                   // TODO: like/save profile
                 },
@@ -285,17 +288,21 @@ class _CenterLabel extends StatelessWidget {
   const _CenterLabel({required this.icon, required this.label});
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 40, color: Colors.deepPurple),
-        const SizedBox(height: 12),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final brand = Theme.of(context).colorScheme.primary;
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 40, color: brand),
+          const SizedBox(height: 12),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
 }
