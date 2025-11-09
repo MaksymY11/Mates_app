@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'profile_edit_page.dart';
 
 /// Entry point for logged-in users.
 /// Shows a bottom nav with 5 tabs; the center (index 2) is the Home/Profiles feed.
@@ -277,9 +278,29 @@ class NotificationsPage extends StatelessWidget {
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
+
   @override
-  Widget build(BuildContext context) =>
-      const _CenterLabel(icon: Icons.person, label: 'Profile');
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: ElevatedButton.icon(
+        icon: const Icon(Icons.edit),
+        label: const Text('Edit Profile'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: cs.primary,
+          foregroundColor: cs.onPrimary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        onPressed: () {
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const ProfileEditPage()));
+        },
+      ),
+    );
+  }
 }
 
 class _CenterLabel extends StatelessWidget {
