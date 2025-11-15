@@ -4,7 +4,7 @@ import 'package:mates/home_page.dart';
 import 'login_page.dart';
 import 'signup_page.dart';
 import 'landing_page.dart';
-import 'profile_edit_page.dart';
+import 'profile_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -49,7 +49,7 @@ class MyApp extends StatelessWidget {
         '/login': (context) => LoginPage(),
         '/signup': (context) => const SignUpPage(),
         '/home': (context) => const HomeShell(),
-        '/profile/edit': (context) => const ProfileEditPage(),
+        '/home/profile': (context) => const ProfilePage(),
       },
     );
   }
