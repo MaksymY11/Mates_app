@@ -280,10 +280,11 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() => _avatarData = bytes);
       await _saveAvatarLocally(bytes);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Failed to pick image: $e')));
+      }
     }
   }
 
@@ -309,10 +310,11 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() => _avatarData = bytes);
       await _saveAvatarLocally(bytes);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Failed to take photo: $e')));
+      }
     }
   }
 
@@ -324,10 +326,11 @@ class _ProfilePageState extends State<ProfilePage> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kAvatarPathKey, file.path);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to save avatar locally: $e')),
         );
+      }
     }
   }
 
@@ -357,10 +360,11 @@ class _ProfilePageState extends State<ProfilePage> {
       }
       if (mounted) setState(() => _avatarData = null);
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Failed to remove avatar: $e')));
+      }
     }
   }
 
@@ -458,6 +462,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _logout() async {
     try {
+      await _removeLocalAvatar();
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
@@ -472,6 +477,7 @@ class _ProfilePageState extends State<ProfilePage> {
       await prefs.remove('auth_token');
     } catch (_) {
       // Even if the server call fails, still log out locally
+      await _removeLocalAvatar();
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('auth_token');
     }

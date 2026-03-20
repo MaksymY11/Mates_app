@@ -66,7 +66,7 @@ class _SignUpPageState extends State<SignUpPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Sign In')),
+      appBar: AppBar(),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(

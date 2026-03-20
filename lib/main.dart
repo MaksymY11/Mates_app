@@ -1,11 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'home_page.dart';
 import 'services/api_service.dart';
 import 'login_page.dart';
-import 'signup_page.dart';
 import 'landing_page.dart';
-import 'profile_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -47,12 +44,6 @@ class MyApp extends StatelessWidget {
         iconTheme: const IconThemeData(color: brand),
       ),
       home: kIsWeb ? const LandingPage() : LoginPage(),
-      routes: {
-        '/login': (context) => LoginPage(),
-        '/signup': (context) => const SignUpPage(),
-        '/home': (context) => const HomeShell(),
-        '/home/profile': (context) => const ProfilePage(),
-      },
     );
   }
 }

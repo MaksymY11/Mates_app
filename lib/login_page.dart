@@ -143,32 +143,35 @@ class _LoginPageState extends State<LoginPage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        ElevatedButton(
-                          onPressed: _loading ? null : _handleLogin,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF7CFF7C),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
+                        SizedBox(
+                          width: 100,
+                          child: ElevatedButton(
+                            onPressed: _loading ? null : _handleLogin,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF7CFF7C),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              elevation: 0,
                             ),
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            elevation: 0,
+                            child:
+                                _loading
+                                    ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                    : const Text(
+                                      'Continue',
+                                      style: TextStyle(
+                                        color: Colors.black,
+                                        fontSize: 16,
+                                      ),
+                                    ),
                           ),
-                          child:
-                              _loading
-                                  ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                  : Text(
-                                    'Continue',
-                                    style: TextStyle(
-                                      color: Colors.black,
-                                      fontSize: 10,
-                                    ),
-                                  ),
                         ),
                       ],
                     ),
