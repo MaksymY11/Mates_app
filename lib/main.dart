@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:mates/home_page.dart';
+import 'home_page.dart';
+import 'services/api_service.dart';
 import 'login_page.dart';
 import 'signup_page.dart';
 import 'landing_page.dart';
@@ -17,6 +18,7 @@ class MyApp extends StatelessWidget {
     const brand = Color(0xFF7CFF7C); // same as login button
 
     return MaterialApp(
+      navigatorKey: ApiService.navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'Mates',
       theme: ThemeData(

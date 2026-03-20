@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/api_service.dart';
 
 const String kBaseUrl = 'https://mates-backend-dxma.onrender.com';
 const Color kBrand = Color(0xFF7CFF7C);
@@ -205,15 +206,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _loadProfile() async {
     setState(() => _loading = true);
     try {
-      final token = await _token();
-      final res = await http.get(
-        Uri.parse('$kBaseUrl/me'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
-      if (res.statusCode != 200) {
-        throw Exception('Failed to load profile: ${res.body}');
-      }
-      final Map<String, dynamic> j = jsonDecode(res.body);
+      final Map<String, dynamic> j = await ApiService.get('/me');
 
       // Map server fields to UI. Add null checks for fields not present yet.
       _emailCtrl.text = (j['email'] ?? '').toString();
@@ -397,8 +390,8 @@ class _ProfilePageState extends State<ProfilePage> {
     }
     // Handle 401: optionally refresh token and retry
     if (res.statusCode == 401) {
-      // TODO: Implement token refresh and retry logic here
-      throw Exception('Unauthorized. Please log in again.');
+      await ApiService.handleUnauthorized();
+      throw Exception('Session expired. Please log in again.');
     }
     throw Exception('Failed to upload avatar: ${res.body}');
   }
@@ -407,19 +400,18 @@ class _ProfilePageState extends State<ProfilePage> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      final token = await _token();
-      if (token == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Not authenticated')));
-        }
-        setState(() => _saving = false);
-        return;
-      }
-
       String? avatarUrl;
       if (_avatarData != null) {
+        final token = await _token();
+        if (token == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Not authenticated')));
+          }
+          setState(() => _saving = false);
+          return;
+        }
         avatarUrl = await uploadAvatar(_avatarData!, token);
       }
 
@@ -446,18 +438,7 @@ class _ProfilePageState extends State<ProfilePage> {
       // Remove nulls so backend sees only provided keys
       body.removeWhere((key, value) => value == null);
 
-      final res = await http.post(
-        Uri.parse('$kBaseUrl/updateUser'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode(body),
-      );
-
-      if (res.statusCode != 200) {
-        throw Exception(res.body);
-      }
+      await ApiService.post('/updateUser', body: body);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
