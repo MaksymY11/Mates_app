@@ -1,10 +1,15 @@
 // lib/profile_page.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:mates/login_page.dart';
+import 'dart:typed_data';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http_parser/http_parser.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Adjust if you keep baseUrl elsewhere (e.g., in AuthService). Keep in sync!
 const String kBaseUrl = 'https://mates-backend-dxma.onrender.com';
 const Color kBrand = Color(0xFF7CFF7C);
 
@@ -23,6 +28,13 @@ class _ProfilePageState extends State<ProfilePage> {
   final _budgetCtrl = TextEditingController();
   final _aboutCtrl = TextEditingController();
   final _moveInCtrl = TextEditingController(); // shows selected date as text
+  // In-memory avatar bytes (not persisted). Integrate image_picker/uploader later.
+  Uint8List? _avatarData;
+  String? _avatarUrl; // Full-size avatar from server
+  String? _avatarThumbUrl; // Thumbnail avatar from server
+  final ImagePicker _picker = ImagePicker();
+  // Local avatar file path key
+  static const String _kAvatarPathKey = 'avatar_path';
 
   final _formKey = GlobalKey<FormState>();
   bool _loading = true;
@@ -53,7 +65,7 @@ class _ProfilePageState extends State<ProfilePage> {
     'Yoga',
     'Art',
   ];
-  final List<String> preferencesOptions = const [
+  final List<String> prefsOptions = const [
     'Pet Friendly',
     'No Pets',
     'Non-Smoker',
@@ -64,7 +76,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   final Set<String> lifestyle = {};
   final Set<String> activities = {};
-  final Set<String> preferences = {};
+  final Set<String> prefs = {};
 
   // US states (abbr or full names; pick your style)
   final List<String> states = const [
@@ -126,6 +138,51 @@ class _ProfilePageState extends State<ProfilePage> {
     // Update UI when about text changes so the word-count updates live.
     _aboutCtrl.addListener(() => setState(() {}));
     _loadProfile();
+    _loadLocalAvatar();
+  }
+
+  void _showImageOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder:
+          (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.camera_alt),
+                  title: const Text('Take Photo'),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _pickFromCamera();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library),
+                  title: const Text('Choose from Gallery'),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _pickFromGallery();
+                  },
+                ),
+                if (_avatarData != null)
+                  ListTile(
+                    leading: const Icon(Icons.delete_forever),
+                    title: const Text('Remove Photo'),
+                    onTap: () async {
+                      await _removeLocalAvatar();
+                      Navigator.of(ctx).pop();
+                    },
+                  ),
+                ListTile(
+                  leading: const Icon(Icons.close),
+                  title: const Text('Cancel'),
+                  onTap: () => Navigator.of(ctx).pop(),
+                ),
+              ],
+            ),
+          ),
+    );
   }
 
   @override
@@ -167,6 +224,14 @@ class _ProfilePageState extends State<ProfilePage> {
       _aboutCtrl.text = (j['bio'] ?? j['about'] ?? '').toString();
       _state = (j['state'] ?? '') == '' ? null : j['state'];
 
+      // Avatar URLs from server
+      _avatarUrl = j['avatar_url'] as String?;
+      _avatarThumbUrl = j['avatar_thumb_url'] as String?;
+      if (_avatarUrl != null || _avatarThumbUrl != null) {
+        // If server avatar exists, clear local avatar
+        setState(() => _avatarData = null);
+      }
+
       // move-in date (expecting ISO 'YYYY-MM-DD' or timestamp)
       final moveIn = j['move_in_date'];
       if (moveIn != null && moveIn.toString().isNotEmpty) {
@@ -185,9 +250,9 @@ class _ProfilePageState extends State<ProfilePage> {
       activities
         ..clear()
         ..addAll(((j['activities'] ?? []) as List).map((e) => e.toString()));
-      preferences
+      prefs
         ..clear()
-        ..addAll(((j['preferences'] ?? []) as List).map((e) => e.toString()));
+        ..addAll(((j['prefs'] ?? []) as List).map((e) => e.toString()));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -199,11 +264,165 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Future<void> _pickFromGallery() async {
+    try {
+      final XFile? file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 80,
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      // Enforce 5MB max image size
+      const maxBytes = 5 * 1024 * 1024;
+      if (bytes.lengthInBytes > maxBytes) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Image too large (max 5MB)')),
+          );
+        }
+        return;
+      }
+      setState(() => _avatarData = bytes);
+      await _saveAvatarLocally(bytes);
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to pick image: $e')));
+    }
+  }
+
+  Future<void> _pickFromCamera() async {
+    try {
+      final XFile? file = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 80,
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      const maxBytes = 5 * 1024 * 1024;
+      if (bytes.lengthInBytes > maxBytes) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Image too large (max 5MB)')),
+          );
+        }
+        return;
+      }
+      setState(() => _avatarData = bytes);
+      await _saveAvatarLocally(bytes);
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to take photo: $e')));
+    }
+  }
+
+  Future<void> _saveAvatarLocally(Uint8List bytes) async {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final file = File('${dir.path}/profile_avatar.jpg');
+      await file.writeAsBytes(bytes, flush: true);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kAvatarPathKey, file.path);
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save avatar locally: $e')),
+        );
+    }
+  }
+
+  Future<void> _loadLocalAvatar() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final path = prefs.getString(_kAvatarPathKey);
+      if (path == null) return;
+      final file = File(path);
+      if (await file.exists()) {
+        final bytes = await file.readAsBytes();
+        if (mounted) setState(() => _avatarData = bytes);
+      } else {
+        await prefs.remove(_kAvatarPathKey);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _removeLocalAvatar() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final path = prefs.getString(_kAvatarPathKey);
+      if (path != null) {
+        final file = File(path);
+        if (await file.exists()) await file.delete();
+        await prefs.remove(_kAvatarPathKey);
+      }
+      if (mounted) setState(() => _avatarData = null);
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to remove avatar: $e')));
+    }
+  }
+
+  Future<String> uploadAvatar(Uint8List bytes, String token) async {
+    final uri = Uri.parse('$kBaseUrl/uploadAvatar');
+    final req = http.MultipartRequest('POST', uri);
+    req.headers['Authorization'] = 'Bearer $token';
+    req.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: 'avatar.jpg',
+        contentType: MediaType('image', 'jpeg'),
+      ),
+    );
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    if (res.statusCode == 200) {
+      final j = jsonDecode(res.body) as Map<String, dynamic>;
+      // Save both URLs in state
+      setState(() {
+        _avatarUrl = j['avatar_url'] as String?;
+        _avatarThumbUrl = j['avatar_thumb_url'] as String?;
+        _avatarData = null; // Clear local avatar after upload
+      });
+      return j['avatar_url'] as String? ?? '';
+    }
+    // Handle 401: optionally refresh token and retry
+    if (res.statusCode == 401) {
+      // TODO: Implement token refresh and retry logic here
+      throw Exception('Unauthorized. Please log in again.');
+    }
+    throw Exception('Failed to upload avatar: ${res.body}');
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
       final token = await _token();
+      if (token == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Not authenticated')));
+        }
+        setState(() => _saving = false);
+        return;
+      }
+
+      String? avatarUrl;
+      if (_avatarData != null) {
+        avatarUrl = await uploadAvatar(_avatarData!, token);
+      }
+
       final body = {
         'name': _nameCtrl.text.trim(),
         'age':
@@ -220,7 +439,8 @@ class _ProfilePageState extends State<ProfilePage> {
         'move_in_date': _moveInDate?.toIso8601String(),
         'lifestyle': lifestyle.toList(),
         'activities': activities.toList(),
-        'preferences': preferences.toList(),
+        'prefs': prefs.toList(),
+        if (avatarUrl != null) 'avatar_url': avatarUrl,
       };
 
       // Remove nulls so backend sees only provided keys
@@ -255,6 +475,33 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Future<void> _logout() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+
+      // Tell the server to invalidate the token
+      if (token != null) {
+        await http.post(
+          Uri.parse('$kBaseUrl/logout'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+      }
+
+      await prefs.remove('auth_token');
+    } catch (_) {
+      // Even if the server call fails, still log out locally
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('auth_token');
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
+  }
+
   String _fmtDate(DateTime d) =>
       '${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}/${d.year}';
 
@@ -285,7 +532,6 @@ class _ProfilePageState extends State<ProfilePage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Card container like the screenshot
                           Material(
                             color: Colors.white,
                             elevation: 2,
@@ -309,55 +555,110 @@ class _ProfilePageState extends State<ProfilePage> {
                                     // Avatar + mini edit button (left aligned)
                                     Row(
                                       children: [
-                                        Stack(
-                                          clipBehavior: Clip.none,
-                                          children: [
-                                            CircleAvatar(
-                                              radius: 36,
-                                              backgroundColor: cs.primary
-                                                  .withOpacity(0.2),
-                                              child: Icon(
-                                                Icons.person,
-                                                size: 40,
-                                                color: cs.primary,
+                                        GestureDetector(
+                                          onTap: () => _showImageOptions(),
+                                          child: Stack(
+                                            clipBehavior: Clip.none,
+                                            children: [
+                                              // Avatar shows selected image if available, otherwise initials or icon
+                                              CircleAvatar(
+                                                radius: 36,
+                                                backgroundColor: cs.primary
+                                                    .withOpacity(0.2),
+                                                backgroundImage:
+                                                    // Prefer server thumbnail, then full, then local
+                                                    _avatarThumbUrl != null
+                                                        ? NetworkImage(
+                                                          _avatarThumbUrl!,
+                                                        )
+                                                        : _avatarUrl != null
+                                                        ? NetworkImage(
+                                                          _avatarUrl!,
+                                                        )
+                                                        : _avatarData != null
+                                                        ? MemoryImage(
+                                                          _avatarData!,
+                                                        )
+                                                        : null,
+                                                child:
+                                                    (_avatarThumbUrl == null &&
+                                                            _avatarUrl ==
+                                                                null &&
+                                                            _avatarData == null)
+                                                        ? Builder(
+                                                          builder: (ctx) {
+                                                            final name =
+                                                                _nameCtrl.text
+                                                                    .trim();
+                                                            final initials =
+                                                                name.isEmpty
+                                                                    ? ''
+                                                                    : name
+                                                                        .split(
+                                                                          ' ',
+                                                                        )
+                                                                        .where(
+                                                                          (s) =>
+                                                                              s.isNotEmpty,
+                                                                        )
+                                                                        .map(
+                                                                          (s) =>
+                                                                              s[0],
+                                                                        )
+                                                                        .take(2)
+                                                                        .join()
+                                                                        .toUpperCase();
+                                                            return initials
+                                                                    .isEmpty
+                                                                ? Icon(
+                                                                  Icons.person,
+                                                                  size: 40,
+                                                                  color:
+                                                                      cs.primary,
+                                                                )
+                                                                : Text(
+                                                                  initials,
+                                                                  style: TextStyle(
+                                                                    fontSize:
+                                                                        20,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                    color:
+                                                                        cs.primary,
+                                                                  ),
+                                                                );
+                                                          },
+                                                        )
+                                                        : null,
                                               ),
-                                            ),
-                                            Positioned(
-                                              right: -2,
-                                              bottom: -2,
-                                              child: InkWell(
-                                                onTap: () {
-                                                  // TODO: image picker & upload
-                                                  ScaffoldMessenger.of(
-                                                    context,
-                                                  ).showSnackBar(
-                                                    const SnackBar(
-                                                      content: Text(
-                                                        'Photo upload coming soon',
+                                              Positioned(
+                                                right: -2,
+                                                bottom: -2,
+                                                child: InkWell(
+                                                  onTap:
+                                                      () => _showImageOptions(),
+                                                  child: Container(
+                                                    width: 36,
+                                                    height: 36,
+                                                    decoration: BoxDecoration(
+                                                      color: cs.primary,
+                                                      shape: BoxShape.circle,
+                                                      border: Border.all(
+                                                        color: Colors.white,
+                                                        width: 2,
                                                       ),
                                                     ),
-                                                  );
-                                                },
-                                                child: Container(
-                                                  width: 28,
-                                                  height: 28,
-                                                  decoration: BoxDecoration(
-                                                    color: cs.primary,
-                                                    shape: BoxShape.circle,
-                                                    border: Border.all(
-                                                      color: Colors.white,
-                                                      width: 2,
+                                                    child: Icon(
+                                                      Icons.camera_alt,
+                                                      size: 18,
+                                                      color: cs.onPrimary,
                                                     ),
-                                                  ),
-                                                  child: Icon(
-                                                    Icons.camera_alt,
-                                                    size: 16,
-                                                    color: cs.onPrimary,
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                         const SizedBox(width: 16),
                                         Expanded(
@@ -529,7 +830,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                       children: [
                                         _label('About You'),
                                         Text(
-                                          '${_aboutCtrl.text.trim().isEmpty ? 0 : _aboutCtrl.text.trim().split(RegExp(r"\\s+")).length}/50 words',
+                                          '${_aboutCtrl.text.trim().isEmpty ? 0 : _aboutCtrl.text.trim().split(RegExp(r"\s+")).length}/50 words',
                                           style: const TextStyle(
                                             color: Colors.black45,
                                             fontSize: 12,
@@ -542,7 +843,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                       maxLines: 4,
                                       decoration: const InputDecoration(
                                         hintText:
-                                            'Tell potential roommates about yourself, your lifestyle, and what you’re looking for… (minimum 50 words)',
+                                            'Tell potential roommates about yourself, your lifestyle, and what you’re looking for… (up to 50 words)',
                                       ),
                                     ),
                                     const SizedBox(height: 24),
@@ -565,8 +866,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
                                     _chipGroup(
                                       title: 'Preferences',
-                                      options: preferencesOptions,
-                                      selected: preferences,
+                                      options: prefsOptions,
+                                      selected: prefs,
                                     ),
 
                                     const SizedBox(height: 24),
@@ -607,6 +908,28 @@ class _ProfilePageState extends State<ProfilePage> {
                                     ),
                                   ],
                                 ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: _logout,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red,
+                                side: const BorderSide(color: Colors.red),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text(
+                                'Log Out',
+                                style: TextStyle(fontSize: 16),
                               ),
                             ),
                           ),

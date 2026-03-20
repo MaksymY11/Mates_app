@@ -23,7 +23,7 @@ class Validators {
     if (!upper.hasMatch(value) ||
         !lower.hasMatch(value) ||
         !digit.hasMatch(value)) {
-      return 'Use upper, lower case letters & a number';
+      return 'Use uppercase, lowercase letters, and numbers';
     }
     return null;
   }

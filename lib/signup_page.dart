@@ -1,6 +1,8 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'services/auth_service.dart';
 import 'utils/validators.dart';
+import 'home_page.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -13,7 +15,8 @@ class _SignUpPageState extends State<SignUpPage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
 
   @override
   void dispose() {
@@ -35,17 +38,24 @@ class _SignUpPageState extends State<SignUpPage> {
 
   void _submit() async {
     if (_formKey.currentState?.validate() ?? false) {
-      // Form is valid; proceed with sign-up logic
       try {
         await AuthService.registerUser(
           _emailController.text,
           _passwordController.text,
         );
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('User registered!')));
-        Navigator.pop(context);
+        final token = await AuthService.loginUser(
+          _emailController.text,
+          _passwordController.text,
+        );
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('auth_token', token);
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeShell()),
+          (route) => false,
+        );
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(e.toString())));
