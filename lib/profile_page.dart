@@ -11,7 +11,6 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/api_service.dart';
 
-const String kBaseUrl = 'https://mates-backend-dxma.onrender.com';
 const Color kBrand = Color(0xFF7CFF7C);
 
 class ProfilePage extends StatefulWidget {
@@ -369,7 +368,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<String> uploadAvatar(Uint8List bytes, String token) async {
-    final uri = Uri.parse('$kBaseUrl/uploadAvatar');
+    final uri = Uri.parse('${ApiService.baseUrl}/uploadAvatar');
     final req = http.MultipartRequest('POST', uri);
     req.headers['Authorization'] = 'Bearer $token';
     req.files.add(
@@ -469,7 +468,7 @@ class _ProfilePageState extends State<ProfilePage> {
       // Tell the server to invalidate the token
       if (token != null) {
         await http.post(
-          Uri.parse('$kBaseUrl/logout'),
+          Uri.parse('${ApiService.baseUrl}/logout'),
           headers: {'Authorization': 'Bearer $token'},
         );
       }
