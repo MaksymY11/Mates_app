@@ -112,6 +112,7 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
   }
 
   void _updateApartment(Map<String, dynamic> apartment) {
+    if (!mounted) return;
     setState(() {
       _items = apartment['items'] as List<dynamic>? ?? [];
     });
@@ -157,7 +158,7 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+            .showSnackBar(const SnackBar(content: Text('Failed to update apartment. Please try again.')));
       }
     }
   }
@@ -166,6 +167,8 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
     final zoneCategories = _catalog[zone] as Map<String, dynamic>?;
     if (zoneCategories == null) return;
 
+    final beforeCount = _itemsForZone(zone).length;
+
     final result = await showFurniturePicker(
       context,
       zone: zone,
@@ -173,7 +176,16 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
       placedFurnitureIds: _placedFurnitureIdsForZone(zone),
       furnitureLookup: _furnitureLookup,
     );
-    if (result != null && mounted) _updateApartment(result);
+    if (result != null && mounted) {
+      _updateApartment(result);
+      // If item count didn't increase, a constraint group swap happened.
+      final afterCount = _itemsForZone(zone).length;
+      if (afterCount <= beforeCount) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Replaced with your new choice')),
+        );
+      }
+    }
   }
 
   Future<void> _openPresetPicker(String zone) async {

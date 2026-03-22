@@ -43,7 +43,7 @@ class _PresetPickerSheetState extends State<_PresetPickerSheet> {
         setState(() => _loading = false);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Failed to apply preset: $e')));
+        ).showSnackBar(const SnackBar(content: Text('Failed to apply preset. Please try again.')));
       }
     }
   }

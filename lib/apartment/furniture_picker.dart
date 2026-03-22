@@ -116,7 +116,7 @@ class _FurniturePickerSheetState extends State<_FurniturePickerSheet> {
         setState(() => _loading = false);
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('$e')));
+        ).showSnackBar(const SnackBar(content: Text('Failed to place item. Please try again.')));
       }
     }
   }
