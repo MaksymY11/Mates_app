@@ -2,6 +2,8 @@
 
 A roommate matching app built with Flutter, connecting to a FastAPI backend.
 
+> **License:** This project is source-available. See [LICENSE](LICENSE) for terms.
+
 ## Tech Stack
 
 - **Flutter** (Dart) — cross-platform frontend targeting web and Windows desktop
