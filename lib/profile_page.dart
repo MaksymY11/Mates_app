@@ -752,9 +752,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                                         context: context,
                                                         initialDate:
                                                             _moveInDate ?? now,
-                                                        firstDate: DateTime(
-                                                          now.year - 1,
-                                                        ),
+                                                        firstDate: now,
                                                         lastDate: DateTime(
                                                           now.year + 5,
                                                         ),

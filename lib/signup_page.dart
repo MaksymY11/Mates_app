@@ -17,6 +17,7 @@ class _SignUpPageState extends State<SignUpPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -38,6 +39,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
   void _submit() async {
     if (_formKey.currentState?.validate() ?? false) {
+      setState(() => _loading = true);
       try {
         await AuthService.registerUser(
           _emailController.text,
@@ -59,6 +61,8 @@ class _SignUpPageState extends State<SignUpPage> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(e.toString())));
+      } finally {
+        if (mounted) setState(() => _loading = false);
       }
     }
   }
@@ -167,7 +171,7 @@ class _SignUpPageState extends State<SignUpPage> {
 
                   // Submit button
                   ElevatedButton(
-                    onPressed: _submit,
+                    onPressed: _loading ? null : _submit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF7CFF7C),
                       shape: RoundedRectangleBorder(
