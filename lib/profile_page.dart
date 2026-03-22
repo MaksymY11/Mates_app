@@ -1,12 +1,10 @@
 // lib/profile_page.dart
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mates/login_page.dart';
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:http_parser/http_parser.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/api_service.dart';
@@ -197,11 +195,6 @@ class _ProfilePageState extends State<ProfilePage> {
     super.dispose();
   }
 
-  Future<String?> _token() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('auth_token');
-  }
-
   Future<void> _loadProfile() async {
     setState(() => _loading = true);
     try {
@@ -367,36 +360,18 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  Future<String> uploadAvatar(Uint8List bytes, String token) async {
-    final uri = Uri.parse('${ApiService.baseUrl}/uploadAvatar');
-    final req = http.MultipartRequest('POST', uri);
-    req.headers['Authorization'] = 'Bearer $token';
-    req.files.add(
-      http.MultipartFile.fromBytes(
-        'file',
-        bytes,
-        filename: 'avatar.jpg',
-        contentType: MediaType('image', 'jpeg'),
-      ),
+  Future<String> uploadAvatar(Uint8List bytes) async {
+    final j = await ApiService.uploadFile(
+      '/uploadAvatar',
+      bytes: bytes,
+      filename: 'avatar.jpg',
     );
-    final streamed = await req.send();
-    final res = await http.Response.fromStream(streamed);
-    if (res.statusCode == 200) {
-      final j = jsonDecode(res.body) as Map<String, dynamic>;
-      // Save both URLs in state
-      setState(() {
-        _avatarUrl = j['avatar_url'] as String?;
-        _avatarThumbUrl = j['avatar_thumb_url'] as String?;
-        _avatarData = null; // Clear local avatar after upload
-      });
-      return j['avatar_url'] as String? ?? '';
-    }
-    // Handle 401: optionally refresh token and retry
-    if (res.statusCode == 401) {
-      await ApiService.handleUnauthorized();
-      throw Exception('Session expired. Please log in again.');
-    }
-    throw Exception('Failed to upload avatar: ${res.body}');
+    setState(() {
+      _avatarUrl = j['avatar_url'] as String?;
+      _avatarThumbUrl = j['avatar_thumb_url'] as String?;
+      _avatarData = null;
+    });
+    return j['avatar_url'] as String? ?? '';
   }
 
   Future<void> _save() async {
@@ -405,17 +380,7 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       String? avatarUrl;
       if (_avatarData != null) {
-        final token = await _token();
-        if (token == null) {
-          if (mounted) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text('Not authenticated')));
-          }
-          setState(() => _saving = false);
-          return;
-        }
-        avatarUrl = await uploadAvatar(_avatarData!, token);
+        avatarUrl = await uploadAvatar(_avatarData!);
       }
 
       final body = {

@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../login_page.dart';
 
@@ -72,6 +74,40 @@ class ApiService {
 
     if (res.statusCode != 200 && res.statusCode != 201) {
       throw Exception('POST $path failed: ${res.body}');
+    }
+
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  // Authenticated multipart file upload
+  static Future<Map<String, dynamic>> uploadFile(
+    String path, {
+    required Uint8List bytes,
+    required String filename,
+    MediaType? contentType,
+  }) async {
+    final token = await _getToken();
+    final uri = Uri.parse('$baseUrl$path');
+    final req = http.MultipartRequest('POST', uri);
+    req.headers['Authorization'] = 'Bearer $token';
+    req.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: filename,
+        contentType: contentType ?? MediaType('image', 'jpeg'),
+      ),
+    );
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+
+    if (res.statusCode == 401) {
+      await handleUnauthorized();
+      throw Exception('Session expired. Please log in again.');
+    }
+
+    if (res.statusCode != 200) {
+      throw Exception('Upload $path failed: ${res.body}');
     }
 
     return jsonDecode(res.body) as Map<String, dynamic>;
