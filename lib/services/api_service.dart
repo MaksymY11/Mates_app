@@ -79,6 +79,26 @@ class ApiService {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
+  // Authenticated DELETE request
+  static Future<Map<String, dynamic>> delete(String path) async {
+    final token = await _getToken();
+    final res = await http.delete(
+      Uri.parse('$baseUrl$path'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 401) {
+      await handleUnauthorized();
+      throw Exception('Session expired. Please log in again.');
+    }
+
+    if (res.statusCode != 200) {
+      throw Exception('DELETE $path failed: ${res.body}');
+    }
+
+    return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
   // Authenticated multipart file upload
   static Future<Map<String, dynamic>> uploadFile(
     String path, {

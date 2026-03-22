@@ -1,0 +1,480 @@
+import 'dart:math' as math;
+import 'package:flutter/material.dart';
+import '../services/apartment_service.dart';
+import 'furniture_picker.dart' show iconFor;
+
+const List<String> _zoneKeys = [
+  'bedroom',
+  'living_room',
+  'kitchen',
+  'bathroom',
+];
+const List<String> _zoneLabels = [
+  'Bedroom',
+  'Living Room',
+  'Kitchen',
+  'Bathroom',
+];
+const List<IconData> _zoneIcons = [
+  Icons.bed,
+  Icons.weekend,
+  Icons.kitchen,
+  Icons.bathtub,
+];
+
+class ApartmentViewPage extends StatefulWidget {
+  final int userId;
+  final String? userName;
+
+  const ApartmentViewPage({
+    super.key,
+    required this.userId,
+    this.userName,
+  });
+
+  @override
+  State<ApartmentViewPage> createState() => _ApartmentViewPageState();
+}
+
+class _ApartmentViewPageState extends State<ApartmentViewPage>
+    with SingleTickerProviderStateMixin {
+  bool _loading = true;
+  String? _error;
+
+  List<dynamic> _items = [];
+  Map<int, Map<String, dynamic>> _furnitureLookup = {};
+
+  int? _activeZone;
+  late final AnimationController _zoomController;
+  late Animation<double> _zoomAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _zoomController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _zoomAnimation = CurvedAnimation(
+      parent: _zoomController,
+      curve: Curves.easeInOut,
+    );
+    _zoomController.addListener(() => setState(() {}));
+    _init();
+  }
+
+  @override
+  void dispose() {
+    _zoomController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _init() async {
+    try {
+      final results = await Future.wait([
+        ApartmentService.getUserApartment(widget.userId),
+        ApartmentService.getCatalog(),
+      ]);
+
+      final apartment = results[0];
+      final catalog = results[1];
+
+      final lookup = <int, Map<String, dynamic>>{};
+      for (final zoneEntry in catalog.entries) {
+        final categories = zoneEntry.value as Map<String, dynamic>;
+        for (final catEntry in categories.entries) {
+          for (final item in catEntry.value as List<dynamic>) {
+            final f = item as Map<String, dynamic>;
+            lookup[f['id'] as int] = f;
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _items = apartment['items'] as List<dynamic>? ?? [];
+          _furnitureLookup = lookup;
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = '$e';
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  List<dynamic> _itemsForZone(String zone) {
+    return _items
+        .where((item) => (item as Map<String, dynamic>)['zone'] == zone)
+        .toList();
+  }
+
+  void _selectZone(int index) {
+    setState(() => _activeZone = index);
+    _zoomController.forward();
+  }
+
+  void _zoomOut() {
+    _zoomController.reverse().then((_) {
+      if (mounted) setState(() => _activeZone = null);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = widget.userName != null
+        ? "${widget.userName}'s Apartment"
+        : 'Apartment';
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title),
+        centerTitle: true,
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(_error!, textAlign: TextAlign.center),
+                  ),
+                )
+              : Stack(
+                  children: [
+                    _buildApartmentView(),
+                    if (_activeZone != null) _buildBackButton(),
+                    if (_activeZone != null) _buildZoneLabel(),
+                    if (_activeZone != null) _buildItemsPanel(),
+                  ],
+                ),
+    );
+  }
+
+  Widget _buildBackButton() {
+    return Positioned(
+      top: 12,
+      left: 12,
+      child: Material(
+        color: Colors.white,
+        elevation: 2,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: _zoomOut,
+          child: const Padding(
+            padding: EdgeInsets.all(10),
+            child: Icon(Icons.arrow_back, size: 22),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildZoneLabel() {
+    return Positioned(
+      top: 16,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: AnimatedOpacity(
+          opacity: _zoomAnimation.value,
+          duration: Duration.zero,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: const [
+                BoxShadow(color: Colors.black12, blurRadius: 4),
+              ],
+            ),
+            child: Text(
+              _zoneLabels[_activeZone!],
+              style:
+                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildApartmentView() {
+    final brand = Theme.of(context).colorScheme.primary;
+    final size = MediaQuery.of(context).size;
+    final gridSize = math.min(size.width * 0.85, size.height * 0.55);
+
+    final zoom = _zoomAnimation.value;
+    final scale = 1.0 + zoom * 1.2;
+    final tiltAngle = -(45.0 - zoom * 25.0) * math.pi / 180.0;
+
+    double offsetX = 0;
+    double offsetY = 0;
+    if (_activeZone != null) {
+      final row = _activeZone! < 2 ? -1.0 : 1.0;
+      final col = _activeZone! % 2 == 0 ? -1.0 : 1.0;
+      offsetX = -col * gridSize * 0.25 * zoom;
+      offsetY = -row * gridSize * 0.25 * zoom;
+    }
+
+    return Center(
+      child: Transform(
+        alignment: Alignment.center,
+        transform: Matrix4.identity()
+          ..setEntry(3, 2, 0.0012)
+          ..rotateX(tiltAngle)
+          ..scaleByDouble(scale, scale, scale, 1.0)
+          ..translateByDouble(offsetX, offsetY, 0.0, 1.0),
+        child: SizedBox(
+          width: gridSize,
+          height: gridSize,
+          child: _buildRoomGrid(gridSize, brand),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRoomGrid(double gridSize, Color brand) {
+    final roomSize = gridSize / 2;
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+          ),
+        ),
+        for (int i = 0; i < 4; i++)
+          Positioned(
+            left: (i % 2) * roomSize,
+            top: (i ~/ 2) * roomSize,
+            width: roomSize,
+            height: roomSize,
+            child: _buildRoom(i, brand),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildRoom(int index, Color brand) {
+    final zone = _zoneKeys[index];
+    final label = _zoneLabels[index];
+    final zoneItems = _itemsForZone(zone);
+    final isActive = _activeZone == index;
+    final zoom = _zoomAnimation.value;
+    final opacity =
+        _activeZone == null ? 1.0 : (isActive ? 1.0 : 1.0 - zoom * 0.7);
+
+    final roomColors = [
+      const Color(0xFFF3E8FF),
+      const Color(0xFFE8F5E9),
+      const Color(0xFFFFF8E1),
+      const Color(0xFFE3F2FD),
+    ];
+
+    return GestureDetector(
+      onTap: _activeZone == null ? () => _selectZone(index) : null,
+      child: AnimatedOpacity(
+        opacity: opacity,
+        duration: const Duration(milliseconds: 200),
+        child: Container(
+          margin: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: roomColors[index],
+            border: Border.all(
+              color: isActive ? brand : Colors.grey[400]!,
+              width: isActive ? 2.5 : 1.0,
+            ),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Expanded(
+                  child: zoneItems.isEmpty
+                      ? Center(
+                          child: Icon(_zoneIcons[index],
+                              size: 28, color: Colors.grey[300]),
+                        )
+                      : Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: zoneItems.map((item) {
+                            final f = item as Map<String, dynamic>;
+                            final fId = f['furniture_id'] as int;
+                            final furniture = _furnitureLookup[fId];
+                            final iconName =
+                                furniture?['icon_name'] as String? ?? '';
+                            return Tooltip(
+                              message:
+                                  furniture?['name'] as String? ?? '',
+                              child: Container(
+                                width: 30,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                  color: brand.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Icon(iconFor(iconName),
+                                    size: 16, color: brand),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Read-only panel showing placed items (no edit controls).
+  Widget _buildItemsPanel() {
+    final brand = Theme.of(context).colorScheme.primary;
+    final zone = _zoneKeys[_activeZone!];
+    final zoneItems = _itemsForZone(zone);
+
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: AnimatedSlide(
+        offset: Offset.zero,
+        duration: const Duration(milliseconds: 300),
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.35,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 10,
+                  offset: Offset(0, -2)),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Placed furniture',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 8),
+              if (zoneItems.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Text(
+                    'Nothing placed here yet.',
+                    style: TextStyle(color: Colors.grey[500]),
+                  ),
+                )
+              else
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    itemCount: zoneItems.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 6),
+                    itemBuilder: (context, index) {
+                      final i = zoneItems[index] as Map<String, dynamic>;
+                      final furnitureId = i['furniture_id'] as int;
+                      final furniture = _furnitureLookup[furnitureId];
+                      final name =
+                          furniture?['name'] as String? ?? 'Unknown';
+                      final desc =
+                          furniture?['description'] as String? ?? '';
+                      final iconName =
+                          furniture?['icon_name'] as String? ?? '';
+
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: brand.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(iconFor(iconName),
+                                color: brand, size: 22),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    name,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  if (desc.isNotEmpty)
+                                    Text(
+                                      desc,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

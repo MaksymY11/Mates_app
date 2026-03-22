@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'profile_page.dart';
+import 'apartment/apartment_builder_page.dart';
 
 /// Entry point for logged-in users.
 /// Shows a bottom nav with 5 tabs; the center (index 2) is the Home/Profiles feed.
@@ -11,14 +12,14 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  // Center tab is the default (= Home / profiles feed)
+  // Apartment builder is the default landing tab (center)
   int _currentIndex = 2;
 
   // Keep pages alive with an IndexedStack
   late final List<Widget> _pages = const [
-    MatchingPage(),
+    DiscoveryPage(),        // placeholder — Session 5: Neighborhoods
     ChatsPage(),
-    HomeFeedPage(), // center
+    ApartmentBuilderPage(), // center
     NotificationsPage(),
     ProfilePage(),
   ];
@@ -33,12 +34,12 @@ class _HomeShellState extends State<HomeShell> {
         currentIndex: _currentIndex,
         onTap: (i) => setState(() => _currentIndex = i),
         items: const [
-          _BottomNavItem(icon: Icons.favorite, semanticLabel: 'Matching'),
+          _BottomNavItem(icon: Icons.explore, semanticLabel: 'Discover'),
           _BottomNavItem(
             icon: Icons.chat_bubble_rounded,
             semanticLabel: 'Chats',
           ),
-          _BottomNavItem(icon: Icons.people_alt_rounded, semanticLabel: 'Home'),
+          _BottomNavItem(icon: Icons.home_rounded, semanticLabel: 'Apartment'),
           _BottomNavItem(icon: Icons.notifications, semanticLabel: 'Alerts'),
           _BottomNavItem(icon: Icons.person, semanticLabel: 'Profile'),
         ],
@@ -123,143 +124,13 @@ class _BottomNavItem {
   const _BottomNavItem({required this.icon, required this.semanticLabel});
 }
 
-/// -------- Pages (stubs you can expand) --------
+/// -------- Pages (stubs — expanded in future sessions) --------
 
-/// Center tab: show other user profiles as cards.
-class HomeFeedPage extends StatelessWidget {
-  const HomeFeedPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = Theme.of(context).colorScheme.primary;
-
-    // Mock profiles
-    final profiles = [
-      const _Profile(
-        name: 'Ava',
-        age: 24,
-        city: 'Seattle',
-        bio: 'Early bird, loves hiking and coffee.',
-      ),
-      const _Profile(
-        name: 'Noah',
-        age: 26,
-        city: 'San Jose',
-        bio: 'Night owl dev, tidy, gym 5x/week.',
-      ),
-      const _Profile(
-        name: 'Mia',
-        age: 23,
-        city: 'San Diego',
-        bio: 'Student, plants & pilates fan.',
-      ),
-      const _Profile(
-        name: 'Ethan',
-        age: 29,
-        city: 'Los Angeles',
-        bio: 'Chef, neat, enjoys board games.',
-      ),
-    ];
-
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-      itemBuilder:
-          (context, i) => _ProfileCard(profile: profiles[i], brand: brand),
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
-      itemCount: profiles.length,
-    );
-  }
-}
-
-class _Profile {
-  final String name;
-  final int age;
-  final String city;
-  final String bio;
-  const _Profile({
-    required this.name,
-    required this.age,
-    required this.city,
-    required this.bio,
-  });
-}
-
-class _ProfileCard extends StatelessWidget {
-  final _Profile profile;
-  final Color brand;
-  const _ProfileCard({required this.profile, required this.brand});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      elevation: 2,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          // TODO: open profile details
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: brand.withOpacity(0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.person, size: 36, color: brand),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${profile.name}, ${profile.age}',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      profile.city,
-                      style: const TextStyle(color: Colors.black54),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      profile.bio,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.favorite_border),
-                color: brand,
-                onPressed: () {
-                  // TODO: like/save profile
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class MatchingPage extends StatelessWidget {
-  const MatchingPage({super.key});
+class DiscoveryPage extends StatelessWidget {
+  const DiscoveryPage({super.key});
   @override
   Widget build(BuildContext context) =>
-      const _CenterLabel(icon: Icons.favorite, label: 'Matching');
+      const _CenterLabel(icon: Icons.explore, label: 'Discover');
 }
 
 class ChatsPage extends StatelessWidget {
