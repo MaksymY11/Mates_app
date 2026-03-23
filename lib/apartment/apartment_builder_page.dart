@@ -47,6 +47,7 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
   // Daily scenario state
   Map<String, dynamic>? _dailyScenario;
   bool _scenarioCompletedToday = false;
+  bool _scenarioAllAnswered = false;
   bool _scenarioRequiresSubstitution = false;
   List<dynamic> _scenarioCurrentResponses = [];
 
@@ -143,6 +144,7 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
         setState(() {
           _dailyScenario = data['scenario'] as Map<String, dynamic>?;
           _scenarioCompletedToday = data['completed_today'] == true;
+          _scenarioAllAnswered = data['all_answered'] == true;
           _scenarioRequiresSubstitution = data['requires_substitution'] == true;
           _scenarioCurrentResponses =
               data['current_responses'] as List<dynamic>? ?? [];
@@ -375,6 +377,12 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
                 !_scenarioCompletedToday &&
                 _activeZone == null)
               _buildScenarioBanner(),
+            // All scenarios answered
+            if (_scenarioAllAnswered &&
+                _dailyScenario == null &&
+                !_scenarioCompletedToday &&
+                _activeZone == null)
+              _buildAllAnsweredBanner(),
             // Bottom panel
             if (_activeZone != null) _buildBottomPanel(),
           ],
@@ -838,7 +846,37 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
     );
   }
 
-  // ─── Daily scenario banner ──────────────────────────────────────
+  // ─── Scenario banners ────────────────────────────────────────────
+
+  Widget _buildAllAnsweredBanner() {
+    return Positioned(
+      left: 16,
+      right: 16,
+      top: _vibeLabels.isNotEmpty ? 52 : 14,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: const [
+            BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.check_circle_outline, color: Colors.grey[400], size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                "You've answered all available scenarios!",
+                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildScenarioBanner() {
     final brand = Theme.of(context).colorScheme.primary;
