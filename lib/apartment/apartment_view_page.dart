@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/apartment_service.dart';
 import '../services/vibe_service.dart';
+import '../services/scenario_service.dart';
 import 'furniture_picker.dart' show iconFor;
 
 const List<String> _zoneKeys = [
@@ -49,6 +50,10 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
   List<String> _conversationStarters = [];
   List<String> _theirVibeLabels = [];
   bool _vibeLoaded = false;
+
+  // Scenario comparison
+  List<dynamic> _scenarioComparisons = [];
+  bool _scenariosLoaded = false;
 
   int? _activeZone;
   late final AnimationController _zoomController;
@@ -129,9 +134,18 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
           _vibeLoaded = true;
         });
       }
-    } catch (_) {
-      // Non-critical — comparison card won't show
-    }
+    } catch (_) {}
+
+    try {
+      final scenarioData = await ScenarioService.compare(widget.userId);
+      if (mounted) {
+        setState(() {
+          _scenarioComparisons =
+              scenarioData['comparisons'] as List<dynamic>? ?? [];
+          _scenariosLoaded = true;
+        });
+      }
+    } catch (_) {}
   }
 
   List<dynamic> _itemsForZone(String zone) {
@@ -546,6 +560,134 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
                           ),
                         ),
                       ],
+                    ),
+                  );
+                }),
+              ],
+              // Scenario answer comparisons
+              if (_scenariosLoaded && _scenarioComparisons.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Icon(Icons.quiz_outlined,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.primary),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Scenario Answers',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ..._scenarioComparisons.map((c) {
+                  final comp = c as Map<String, dynamic>;
+                  final prompt = comp['prompt'] as String? ?? '';
+                  final myAnswer = comp['my_answer'] as String? ?? '';
+                  final theirAnswer = comp['their_answer'] as String? ?? '';
+                  final agreed = comp['agreed'] == true;
+                  final starter = comp['conversation_starter'] as String?;
+                  final accentColor =
+                      agreed ? Colors.green : Colors.orange;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: accentColor.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: accentColor.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            prompt,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[700],
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('You: ',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600)),
+                              Expanded(
+                                child: Text(myAnswer,
+                                    style: const TextStyle(fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${widget.userName ?? "Them"}: ',
+                                style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                              Expanded(
+                                child: Text(theirAnswer,
+                                    style: const TextStyle(fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                          if (agreed) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Icon(Icons.check_circle,
+                                    size: 14, color: accentColor),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'You agree on this one!',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: accentColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (!agreed && starter != null) ...[
+                            const SizedBox(height: 6),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(Icons.lightbulb_outline,
+                                    size: 14, color: accentColor),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    starter,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: accentColor,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   );
                 }),

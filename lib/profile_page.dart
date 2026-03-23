@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/api_service.dart';
 import 'services/vibe_service.dart';
+import 'services/scenario_service.dart';
 
 const Color kBrand = Color(0xFF4CAF50);
 const Color kBrandLight = Color(0xFF7CFF7C);
@@ -16,10 +17,10 @@ const Color kBrandLight = Color(0xFF7CFF7C);
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
   @override
-  State<ProfilePage> createState() => _ProfilePageState();
+  ProfilePageState createState() => ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage> {
+class ProfilePageState extends State<ProfilePage> {
   // Controllers
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController(); // display-only
@@ -46,6 +47,9 @@ class _ProfilePageState extends State<ProfilePage> {
 
   // Vibe labels from apartment choices
   List<String> _vibeLabels = [];
+
+  // Scenario answers (max 3)
+  List<dynamic> _scenarioResponses = [];
 
   final Set<String> lifestyle = {};
   final Set<String> activities = {};
@@ -112,6 +116,27 @@ class _ProfilePageState extends State<ProfilePage> {
     _aboutCtrl.addListener(() => setState(() {}));
     _loadProfile();
     _loadLocalAvatar();
+  }
+
+  /// Called by HomeShell when the profile tab becomes active.
+  void refreshProfile() async {
+    try {
+      final vibe = await VibeService.getMyVibe();
+      if (mounted) {
+        setState(() {
+          _vibeLabels = List<String>.from(vibe['vibe_labels'] ?? []);
+        });
+      }
+    } catch (_) {}
+
+    try {
+      final history = await ScenarioService.getHistory();
+      if (mounted) {
+        setState(() {
+          _scenarioResponses = history['responses'] as List<dynamic>? ?? [];
+        });
+      }
+    } catch (_) {}
   }
 
   void _showImageOptions() {
@@ -223,12 +248,21 @@ class _ProfilePageState extends State<ProfilePage> {
       if (mounted) setState(() => _loading = false);
     }
 
-    // Fetch vibe labels (non-blocking, won't fail profile load)
+    // Fetch vibe labels and scenario responses (non-blocking)
     try {
       final vibe = await VibeService.getMyVibe();
       if (mounted) {
         setState(() {
           _vibeLabels = List<String>.from(vibe['vibe_labels'] ?? []);
+        });
+      }
+    } catch (_) {}
+
+    try {
+      final history = await ScenarioService.getHistory();
+      if (mounted) {
+        setState(() {
+          _scenarioResponses = history['responses'] as List<dynamic>? ?? [];
         });
       }
     } catch (_) {}
@@ -816,6 +850,76 @@ class _ProfilePageState extends State<ProfilePage> {
                                           );
                                         }).toList(),
                                       ),
+
+                                    const SizedBox(height: 24),
+
+                                    _sectionTitle('Scenario Answers'),
+
+                                    if (_scenarioResponses.isEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 8),
+                                        child: Text(
+                                          'Answer daily scenarios to build your profile!',
+                                          style: TextStyle(
+                                            color: Colors.grey[500],
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      )
+                                    else
+                                      ..._scenarioResponses.map((r) {
+                                        final resp = r as Map<String, dynamic>;
+                                        final prompt = resp['prompt'] as String? ?? '';
+                                        final selectedText = resp['selected_text'] as String? ?? '';
+                                        return Padding(
+                                          padding: const EdgeInsets.only(bottom: 8),
+                                          child: Container(
+                                            width: double.infinity,
+                                            padding: const EdgeInsets.all(12),
+                                            decoration: BoxDecoration(
+                                              color: kBrandLight.withValues(alpha: 0.12),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: kBrandLight.withValues(alpha: 0.3),
+                                              ),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  prompt,
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    color: Colors.grey[700],
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Row(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    const Icon(Icons.chat_bubble_outline,
+                                                        size: 16, color: kBrand),
+                                                    const SizedBox(width: 6),
+                                                    Expanded(
+                                                      child: Text(
+                                                        selectedText,
+                                                        style: const TextStyle(
+                                                          fontSize: 14,
+                                                          fontWeight: FontWeight.w600,
+                                                          color: kBrand,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      }),
 
                                     const SizedBox(height: 24),
 

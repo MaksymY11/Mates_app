@@ -15,13 +15,15 @@ class _HomeShellState extends State<HomeShell> {
   // Apartment builder is the default landing tab (center)
   int _currentIndex = 2;
 
+  final _profileKey = GlobalKey<ProfilePageState>();
+
   // Keep pages alive with an IndexedStack
-  late final List<Widget> _pages = const [
-    DiscoveryPage(),        // placeholder — Session 5: Neighborhoods
-    ChatsPage(),
-    ApartmentBuilderPage(), // center
-    NotificationsPage(),
-    ProfilePage(),
+  late final List<Widget> _pages = [
+    const DiscoveryPage(),        // placeholder — Session 5: Neighborhoods
+    const ChatsPage(),
+    const ApartmentBuilderPage(), // center
+    const NotificationsPage(),
+    ProfilePage(key: _profileKey),
   ];
 
   @override
@@ -32,7 +34,10 @@ class _HomeShellState extends State<HomeShell> {
       body: IndexedStack(index: _currentIndex, children: _pages),
       bottomNavigationBar: _BottomNav(
         currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
+        onTap: (i) {
+          setState(() => _currentIndex = i);
+          if (i == 4) _profileKey.currentState?.refreshProfile();
+        },
         items: const [
           _BottomNavItem(icon: Icons.explore, semanticLabel: 'Discover'),
           _BottomNavItem(

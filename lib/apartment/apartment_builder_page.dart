@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/apartment_service.dart';
 import '../services/vibe_service.dart';
+import '../services/scenario_service.dart';
 import 'furniture_picker.dart';
 import 'vibe_picker_page.dart';
 
@@ -42,6 +43,12 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
   Map<int, Map<String, dynamic>> _furnitureLookup = {};
 
   List<String> _vibeLabels = [];
+
+  // Daily scenario state
+  Map<String, dynamic>? _dailyScenario;
+  bool _scenarioCompletedToday = false;
+  bool _scenarioRequiresSubstitution = false;
+  List<dynamic> _scenarioCurrentResponses = [];
 
   /// Currently zoomed zone index, or null for overview.
   int? _activeZone;
@@ -104,6 +111,7 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
           _initialLoading = false;
         });
         _fetchVibe();
+        _fetchDailyScenario();
       }
     } catch (e) {
       if (mounted) {
@@ -126,6 +134,58 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
     } catch (_) {
       // Non-critical — vibe card simply won't show
     }
+  }
+
+  Future<void> _fetchDailyScenario() async {
+    try {
+      final data = await ScenarioService.getDaily();
+      if (mounted) {
+        setState(() {
+          _dailyScenario = data['scenario'] as Map<String, dynamic>?;
+          _scenarioCompletedToday = data['completed_today'] == true;
+          _scenarioRequiresSubstitution = data['requires_substitution'] == true;
+          _scenarioCurrentResponses =
+              data['current_responses'] as List<dynamic>? ?? [];
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _openScenarioSheet() async {
+    if (_dailyScenario == null) return;
+
+    final scenario = _dailyScenario!;
+    final prompt = scenario['prompt'] as String? ?? '';
+    final options = scenario['options'] as List<dynamic>? ?? [];
+    final scenarioId = scenario['id'] as int;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ScenarioBottomSheet(
+        prompt: prompt,
+        options: options,
+        requiresSubstitution: _scenarioRequiresSubstitution,
+        currentResponses: _scenarioCurrentResponses,
+        onAnswer: (String selectedOption, int? replaceScenarioId) async {
+          await ScenarioService.answer(
+            scenarioId: scenarioId,
+            selectedOption: selectedOption,
+            replaceScenarioId: replaceScenarioId,
+          );
+          if (mounted) {
+            _fetchDailyScenario();
+          }
+        },
+        onSkip: () async {
+          await ScenarioService.skip();
+          if (mounted) {
+            _fetchDailyScenario();
+          }
+        },
+      ),
+    );
   }
 
   void _updateApartment(Map<String, dynamic> apartment) {
@@ -310,6 +370,11 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
             // Vibe summary card (always visible when labels exist)
             if (_vibeLabels.isNotEmpty)
               _buildVibeCard(),
+            // Daily scenario banner
+            if (_dailyScenario != null &&
+                !_scenarioCompletedToday &&
+                _activeZone == null)
+              _buildScenarioBanner(),
             // Bottom panel
             if (_activeZone != null) _buildBottomPanel(),
           ],
@@ -768,6 +833,372 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  // ─── Daily scenario banner ──────────────────────────────────────
+
+  Widget _buildScenarioBanner() {
+    final brand = Theme.of(context).colorScheme.primary;
+    final brandLight = Theme.of(context).colorScheme.secondary;
+    final prompt = _dailyScenario?['prompt'] as String? ?? '';
+
+    return Positioned(
+      left: 16,
+      right: 16,
+      top: _vibeLabels.isNotEmpty ? 52 : 14,
+      child: GestureDetector(
+        onTap: _openScenarioSheet,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: brandLight.withValues(alpha: 0.5)),
+            boxShadow: const [
+              BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
+            ],
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.quiz_outlined, color: brand, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Daily Scenario',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: brand,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      prompt,
+                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey[400]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Scenario Bottom Sheet ──────────────────────────────────────────
+
+class _ScenarioBottomSheet extends StatefulWidget {
+  final String prompt;
+  final List<dynamic> options;
+  final bool requiresSubstitution;
+  final List<dynamic> currentResponses;
+  final Future<void> Function(String selectedOption, int? replaceScenarioId) onAnswer;
+  final Future<void> Function() onSkip;
+
+  const _ScenarioBottomSheet({
+    required this.prompt,
+    required this.options,
+    required this.requiresSubstitution,
+    required this.currentResponses,
+    required this.onAnswer,
+    required this.onSkip,
+  });
+
+  @override
+  State<_ScenarioBottomSheet> createState() => _ScenarioBottomSheetState();
+}
+
+class _ScenarioBottomSheetState extends State<_ScenarioBottomSheet> {
+  String? _selectedOption;
+  bool _showSubstitution = false;
+  bool _submitting = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final brand = Theme.of(context).colorScheme.primary;
+    final brandLight = Theme.of(context).colorScheme.secondary;
+
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.85,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Drag handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            if (!_showSubstitution) ...[
+              // Step 1: Show scenario + options
+              Row(
+                children: [
+                  Icon(Icons.quiz_outlined, color: brand, size: 22),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Daily Scenario',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                widget.prompt,
+                style: const TextStyle(fontSize: 15, height: 1.4),
+              ),
+              const SizedBox(height: 18),
+              ...widget.options.map((opt) {
+                final o = opt as Map<String, dynamic>;
+                final id = o['id'] as String;
+                final text = o['text'] as String;
+                final isSelected = _selectedOption == id;
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: GestureDetector(
+                    onTap: _submitting ? null : () {
+                      setState(() => _selectedOption = id);
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? brandLight.withValues(alpha: 0.2)
+                            : Colors.grey[50],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected
+                              ? brand
+                              : Colors.grey[300]!,
+                          width: isSelected ? 2 : 1,
+                        ),
+                      ),
+                      child: Text(
+                        text,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.w400,
+                          color: isSelected ? brand : Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _selectedOption == null || _submitting
+                      ? null
+                      : () async {
+                          if (widget.requiresSubstitution) {
+                            setState(() => _showSubstitution = true);
+                          } else {
+                            setState(() => _submitting = true);
+                            final nav = Navigator.of(context);
+                            final messenger = ScaffoldMessenger.of(context);
+                            try {
+                              await widget.onAnswer(_selectedOption!, null);
+                              if (mounted) nav.pop();
+                            } catch (e) {
+                              if (mounted) {
+                                messenger.showSnackBar(
+                                  SnackBar(content: Text('Failed: $e')),
+                                );
+                                setState(() => _submitting = false);
+                              }
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: brand,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: _submitting
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Confirm Answer',
+                          style: TextStyle(fontSize: 15)),
+                ),
+              ),
+            ] else ...[
+              // Step 2: Substitution — pick which of the 3 to replace
+              Row(
+                children: [
+                  Icon(Icons.swap_horiz, color: brand, size: 22),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Replace an answer',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'You already have 3 scenario answers on your profile. '
+                'Tap one to replace it with your new answer, or keep your current ones.',
+                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 16),
+              ...widget.currentResponses.map((r) {
+                final resp = r as Map<String, dynamic>;
+                final scenarioId = resp['scenario_id'] as int;
+                final prompt = resp['prompt'] as String? ?? '';
+                final selectedText = resp['selected_text'] as String? ?? '';
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: GestureDetector(
+                    onTap: _submitting ? null : () async {
+                      setState(() => _submitting = true);
+                      final nav = Navigator.of(context);
+                      final messenger = ScaffoldMessenger.of(context);
+                      try {
+                        await widget.onAnswer(_selectedOption!, scenarioId);
+                        if (mounted) nav.pop();
+                      } catch (e) {
+                        if (mounted) {
+                          messenger.showSnackBar(
+                            SnackBar(content: Text('Failed: $e')),
+                          );
+                          setState(() => _submitting = false);
+                        }
+                      }
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            prompt,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(Icons.chat_bubble_outline,
+                                  size: 14, color: brand),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  selectedText,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: brand,
+                                  ),
+                                ),
+                              ),
+                              Icon(Icons.swap_horiz,
+                                  size: 18, color: Colors.grey[400]),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: _submitting ? null : () async {
+                    setState(() => _submitting = true);
+                    final nav = Navigator.of(context);
+                    final messenger = ScaffoldMessenger.of(context);
+                    try {
+                      await widget.onSkip();
+                      if (mounted) nav.pop();
+                    } catch (e) {
+                      if (mounted) {
+                        messenger.showSnackBar(
+                          SnackBar(content: Text('Failed: $e')),
+                        );
+                        setState(() => _submitting = false);
+                      }
+                    }
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey[700],
+                    side: BorderSide(color: Colors.grey[400]!),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Keep my current answers',
+                      style: TextStyle(fontSize: 15)),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
