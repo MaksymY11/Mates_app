@@ -12,7 +12,8 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
   @override
   Widget build(BuildContext context) {
-    const brand = Color(0xFF7CFF7C); // same as login button
+    const brand = Color(0xFF4CAF50);
+    const brandLight = Color(0xFF7CFF7C);
 
     return MaterialApp(
       navigatorKey: ApiService.navigatorKey,
@@ -22,10 +23,10 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
           seedColor: brand,
-        ).copyWith(primary: brand, secondary: brand),
+        ).copyWith(primary: brand, secondary: brandLight),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: brand,
+            backgroundColor: brandLight,
             foregroundColor: Colors.black,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(30),
@@ -35,7 +36,7 @@ class MyApp extends StatelessWidget {
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
             foregroundColor: brand,
-            side: const BorderSide(color: brand),
+            side: const BorderSide(color: brandLight),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(30),
             ),

@@ -8,8 +8,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/api_service.dart';
+import 'services/vibe_service.dart';
 
-const Color kBrand = Color(0xFF7CFF7C);
+const Color kBrand = Color(0xFF4CAF50);
+const Color kBrandLight = Color(0xFF7CFF7C);
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -42,35 +44,8 @@ class _ProfilePageState extends State<ProfilePage> {
   String? _state;
   DateTime? _moveInDate;
 
-  // Chips data (you can localize/rename freely)
-  final List<String> lifestyleOptions = const [
-    'Early Bird',
-    'Night Owl',
-    'Clean',
-    'Social',
-    'Quiet',
-    'Organized',
-  ];
-  final List<String> activitiesOptions = const [
-    'Gym',
-    'Cooking',
-    'Reading',
-    'Gaming',
-    'Hiking',
-    'Music',
-    'Movies',
-    'Sports',
-    'Yoga',
-    'Art',
-  ];
-  final List<String> prefsOptions = const [
-    'Pet Friendly',
-    'No Pets',
-    'Non-Smoker',
-    '420 Friendly',
-    'LGBTQ+ Friendly',
-    'Vegetarian',
-  ];
+  // Vibe labels from apartment choices
+  List<String> _vibeLabels = [];
 
   final Set<String> lifestyle = {};
   final Set<String> activities = {};
@@ -247,6 +222,16 @@ class _ProfilePageState extends State<ProfilePage> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+
+    // Fetch vibe labels (non-blocking, won't fail profile load)
+    try {
+      final vibe = await VibeService.getMyVibe();
+      if (mounted) {
+        setState(() {
+          _vibeLabels = List<String>.from(vibe['vibe_labels'] ?? []);
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _pickFromGallery() async {
@@ -798,27 +783,39 @@ class _ProfilePageState extends State<ProfilePage> {
                                     ),
                                     const SizedBox(height: 24),
 
-                                    _sectionTitle('Interests & Lifestyle'),
+                                    _sectionTitle('Your Vibe'),
 
-                                    _chipGroup(
-                                      title: 'Lifestyle',
-                                      options: lifestyleOptions,
-                                      selected: lifestyle,
-                                    ),
-                                    const SizedBox(height: 12),
-
-                                    _chipGroup(
-                                      title: 'Activities',
-                                      options: activitiesOptions,
-                                      selected: activities,
-                                    ),
-                                    const SizedBox(height: 12),
-
-                                    _chipGroup(
-                                      title: 'Preferences',
-                                      options: prefsOptions,
-                                      selected: prefs,
-                                    ),
+                                    if (_vibeLabels.isEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 8),
+                                        child: Text(
+                                          'Furnish your apartment to discover your vibe!',
+                                          style: TextStyle(
+                                            color: Colors.grey[500],
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      )
+                                    else
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: _vibeLabels.map((label) {
+                                          return Chip(
+                                            label: Text(label),
+                                            backgroundColor: kBrandLight.withOpacity(0.25),
+                                            labelStyle: const TextStyle(
+                                              color: kBrand,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                            shape: StadiumBorder(
+                                              side: BorderSide(
+                                                color: kBrandLight.withOpacity(0.5),
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
+                                      ),
 
                                     const SizedBox(height: 24),
 
@@ -905,50 +902,4 @@ class _ProfilePageState extends State<ProfilePage> {
     ),
   );
 
-  Widget _chipGroup({
-    required String title,
-    required List<String> options,
-    required Set<String> selected,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children:
-              options.map((opt) {
-                final isSelected = selected.contains(opt);
-                return FilterChip(
-                  selected: isSelected,
-                  onSelected: (v) {
-                    setState(() {
-                      if (v) {
-                        selected.add(opt);
-                      } else {
-                        selected.remove(opt);
-                      }
-                    });
-                  },
-                  label: Text(opt),
-                  shape: StadiumBorder(
-                    side: BorderSide(
-                      color: isSelected ? kBrand : Colors.black26,
-                      width: 1,
-                    ),
-                  ),
-                  selectedColor: kBrand.withOpacity(0.25),
-                  checkmarkColor: Colors.black,
-                  showCheckmark: true,
-                );
-              }).toList(),
-        ),
-      ],
-    );
-  }
 }

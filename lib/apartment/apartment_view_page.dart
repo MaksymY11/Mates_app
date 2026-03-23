@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/apartment_service.dart';
+import '../services/vibe_service.dart';
 import 'furniture_picker.dart' show iconFor;
 
 const List<String> _zoneKeys = [
@@ -43,6 +44,11 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
 
   List<dynamic> _items = [];
   Map<int, Map<String, dynamic>> _furnitureLookup = {};
+
+  List<dynamic> _similarities = [];
+  List<String> _conversationStarters = [];
+  List<String> _theirVibeLabels = [];
+  bool _vibeLoaded = false;
 
   int? _activeZone;
   late final AnimationController _zoomController;
@@ -96,6 +102,7 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
           _furnitureLookup = lookup;
           _loading = false;
         });
+        _fetchComparison();
       }
     } catch (e) {
       if (mounted) {
@@ -104,6 +111,26 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
           _loading = false;
         });
       }
+    }
+  }
+
+  Future<void> _fetchComparison() async {
+    try {
+      final comparison = await VibeService.compareVibe(widget.userId);
+      if (mounted) {
+        setState(() {
+          _similarities = comparison['similarities'] as List<dynamic>? ?? [];
+          _conversationStarters =
+              List<String>.from(comparison['conversation_starters'] ?? []);
+          final theirVibe =
+              comparison['their_vibe'] as Map<String, dynamic>? ?? {};
+          _theirVibeLabels =
+              List<String>.from(theirVibe['vibe_labels'] ?? []);
+          _vibeLoaded = true;
+        });
+      }
+    } catch (_) {
+      // Non-critical — comparison card won't show
     }
   }
 
@@ -165,6 +192,8 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
               : Stack(
                   children: [
                     _buildApartmentView(),
+                    if (_activeZone == null && _vibeLoaded)
+                      _buildVibeComparison(),
                     if (_activeZone != null) _buildBackButton(),
                     if (_activeZone != null) _buildZoneLabel(),
                     if (_activeZone != null) _buildItemsPanel(),
@@ -294,6 +323,7 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
     final zoneItems = _itemsForZone(zone);
     final isActive = _activeZone == index;
     final zoom = _zoomAnimation.value;
+    final brandLight = Theme.of(context).colorScheme.secondary;
     final opacity =
         _activeZone == null ? 1.0 : (isActive ? 1.0 : 1.0 - zoom * 0.7);
 
@@ -314,7 +344,7 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
           decoration: BoxDecoration(
             color: roomColors[index],
             border: Border.all(
-              color: isActive ? brand : Colors.grey[400]!,
+              color: isActive ? brandLight : Colors.grey[400]!,
               width: isActive ? 2.5 : 1.0,
             ),
             borderRadius: BorderRadius.circular(6),
@@ -367,6 +397,160 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVibeComparison() {
+    final brand = Theme.of(context).colorScheme.primary;
+    final brandLight = Theme.of(context).colorScheme.secondary;
+    final hasContent = _theirVibeLabels.isNotEmpty ||
+        _similarities.isNotEmpty ||
+        _conversationStarters.isNotEmpty;
+    if (!hasContent) return const SizedBox.shrink();
+
+    return Positioned(
+      left: 16,
+      right: 16,
+      bottom: 16,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.4,
+        ),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+                color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+          ],
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Their vibe labels
+              if (_theirVibeLabels.isNotEmpty) ...[
+                Row(
+                  children: [
+                    Icon(Icons.auto_awesome, size: 18, color: brand),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${widget.userName ?? "Their"} Vibe',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: _theirVibeLabels.map((label) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: brandLight.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: brandLight.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: brand,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+              // Similarities
+              if (_similarities.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Icon(Icons.handshake, size: 18, color: Colors.green),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'In common',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ...(_similarities).map((s) {
+                  final sim = s as Map<String, dynamic>;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.check_circle,
+                            size: 16, color: Colors.green),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'You both value ${sim["label"]}',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+              // Conversation starters
+              if (_conversationStarters.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Icon(Icons.chat_bubble_outline,
+                        size: 18, color: Colors.orange),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Worth discussing',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ...(_conversationStarters).map((starter) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.lightbulb_outline,
+                            size: 16, color: Colors.orange),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            starter,
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ],
           ),
         ),
       ),

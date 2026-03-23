@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../services/apartment_service.dart';
+import '../services/vibe_service.dart';
 import 'furniture_picker.dart';
 import 'vibe_picker_page.dart';
 
@@ -39,6 +40,8 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
   Map<String, dynamic> _catalog = {};
   Map<String, dynamic> _presets = {};
   Map<int, Map<String, dynamic>> _furnitureLookup = {};
+
+  List<String> _vibeLabels = [];
 
   /// Currently zoomed zone index, or null for overview.
   int? _activeZone;
@@ -100,6 +103,7 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
           _furnitureLookup = lookup;
           _initialLoading = false;
         });
+        _fetchVibe();
       }
     } catch (e) {
       if (mounted) {
@@ -111,11 +115,25 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
     }
   }
 
+  Future<void> _fetchVibe() async {
+    try {
+      final vibe = await VibeService.getMyVibe();
+      if (mounted) {
+        setState(() {
+          _vibeLabels = List<String>.from(vibe['vibe_labels'] ?? []);
+        });
+      }
+    } catch (_) {
+      // Non-critical — vibe card simply won't show
+    }
+  }
+
   void _updateApartment(Map<String, dynamic> apartment) {
     if (!mounted) return;
     setState(() {
       _items = apartment['items'] as List<dynamic>? ?? [];
     });
+    _fetchVibe();
   }
 
   List<dynamic> _itemsForZone(String zone) {
@@ -154,7 +172,9 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
     try {
       await ApartmentService.removeItem(itemId);
       final apartment = await ApartmentService.getMyApartment();
-      if (mounted) _updateApartment(apartment);
+      if (mounted) {
+        _updateApartment(apartment);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -259,7 +279,7 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
             // Zone label when zoomed
             if (_activeZone != null)
               Positioned(
-                top: 16,
+                top: 52,
                 left: 0,
                 right: 0,
                 child: Center(
@@ -287,6 +307,9 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
                   ),
                 ),
               ),
+            // Vibe summary card (always visible when labels exist)
+            if (_vibeLabels.isNotEmpty)
+              _buildVibeCard(),
             // Bottom panel
             if (_activeZone != null) _buildBottomPanel(),
           ],
@@ -392,6 +415,7 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
     final zoneItems = _itemsForZone(zone);
     final isActive = _activeZone == index;
     final zoom = _zoomAnimation.value;
+    final brandLight = Theme.of(context).colorScheme.secondary;
 
     // Dim non-active rooms when zoomed.
     final opacity =
@@ -415,7 +439,7 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
           decoration: BoxDecoration(
             color: roomColors[index],
             border: Border.all(
-              color: isActive ? brand : Colors.grey[400]!,
+              color: isActive ? brandLight : Colors.grey[400]!,
               width: isActive ? 2.5 : 1.0,
             ),
             borderRadius: BorderRadius.circular(6),
@@ -550,6 +574,47 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
     );
   }
 
+  // ─── Vibe summary strip ─────────────────────────────────────────
+
+  Widget _buildVibeCard() {
+    final brand = Theme.of(context).colorScheme.primary;
+    final brandLight = Theme.of(context).colorScheme.secondary;
+    return Positioned(
+      left: 56,
+      right: 0,
+      top: 14,
+      child: SizedBox(
+        height: 32,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.only(left: 4, right: 16),
+          itemCount: _vibeLabels.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 6),
+          itemBuilder: (context, index) {
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: brandLight.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: brandLight.withValues(alpha: 0.5),
+                ),
+              ),
+              child: Text(
+                _vibeLabels[index],
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: brand,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   // ─── Bottom panel (furniture picker + placed items) ──────────────
 
   Widget _buildBottomPanel() {
@@ -627,7 +692,7 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
                           label: const Text('Use preset'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: brand,
-                            side: BorderSide(color: brand),
+                            side: BorderSide(color: Theme.of(context).colorScheme.secondary),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
