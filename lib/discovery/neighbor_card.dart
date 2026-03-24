@@ -6,6 +6,10 @@ class NeighborCard extends StatelessWidget {
   final int userId;
   final String? name;
   final String? avatarUrl;
+  final String? city;
+  final String? state;
+  final int? budget;
+  final String? moveInDate;
   final List<String> vibeLabels;
   final double similarityScore;
 
@@ -14,6 +18,10 @@ class NeighborCard extends StatelessWidget {
     required this.userId,
     this.name,
     this.avatarUrl,
+    this.city,
+    this.state,
+    this.budget,
+    this.moveInDate,
     required this.vibeLabels,
     required this.similarityScore,
   });
@@ -82,12 +90,40 @@ class NeighborCard extends StatelessWidget {
                           fontWeight: FontWeight.w500,
                         ),
                       ),
+                      if (city != null || state != null)
+                        Text(
+                          [city, state].where((s) => s != null && s.isNotEmpty).join(', '),
+                          style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                        ),
                     ],
                   ),
                 ),
                 Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey[400]),
               ],
             ),
+            if (budget != null || moveInDate != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  if (budget != null) ...[
+                    Icon(Icons.attach_money, size: 13, color: Colors.grey[500]),
+                    Text(
+                      '\$$budget/mo',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  if (moveInDate != null) ...[
+                    Icon(Icons.calendar_today, size: 12, color: Colors.grey[500]),
+                    const SizedBox(width: 2),
+                    Text(
+                      moveInDate!.substring(0, 10),
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                    ),
+                  ],
+                ],
+              ),
+            ],
             if (vibeLabels.isNotEmpty) ...[
               const SizedBox(height: 8),
               Wrap(

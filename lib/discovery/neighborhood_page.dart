@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 import '../services/discovery_service.dart';
 import 'neighbor_card.dart';
 import 'neighborhood_card.dart';
@@ -14,10 +15,17 @@ class NeighborhoodPageState extends State<NeighborhoodPage> {
   bool _loading = true;
   String? _error;
 
+  String _locationPref = 'same_city';
   Map<String, dynamic> _neighborhood = {};
   double _mySimilarity = 0.0;
   List<dynamic> _neighbors = [];
   List<dynamic> _nearby = [];
+
+  static const _prefLabels = {
+    'same_city': 'Same city',
+    'same_state': 'Same state',
+    'anywhere': 'Anywhere',
+  };
 
   @override
   void initState() {
@@ -36,15 +44,18 @@ class NeighborhoodPageState extends State<NeighborhoodPage> {
 
     try {
       final results = await Future.wait([
+        ApiService.get('/me'),
         DiscoveryService.getNeighborhood(),
         DiscoveryService.getNearby(),
       ]);
 
-      final hoodData = results[0];
-      final nearbyData = results[1];
+      final me = results[0];
+      final hoodData = results[1];
+      final nearbyData = results[2];
 
       if (mounted) {
         setState(() {
+          _locationPref = (me['location_preference'] as String?) ?? 'same_city';
           _neighborhood = hoodData['neighborhood'] as Map<String, dynamic>? ?? {};
           _mySimilarity = (hoodData['my_similarity_score'] as num?)?.toDouble() ?? 0.0;
           _neighbors = hoodData['neighbors'] as List<dynamic>? ?? [];
@@ -60,6 +71,14 @@ class NeighborhoodPageState extends State<NeighborhoodPage> {
         });
       }
     }
+  }
+
+  Future<void> _updateLocationPref(String pref) async {
+    setState(() => _locationPref = pref);
+    try {
+      await ApiService.post('/updateUser', body: {'location_preference': pref});
+      await _load();
+    } catch (_) {}
   }
 
   @override
@@ -158,7 +177,39 @@ class NeighborhoodPageState extends State<NeighborhoodPage> {
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+
+          // ── Location preference picker ──
+          Row(
+            children: [
+              Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
+              const SizedBox(width: 6),
+              Text(
+                'Show people in:',
+                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<String>(
+              segments: _prefLabels.entries.map((e) {
+                return ButtonSegment<String>(
+                  value: e.key,
+                  label: Text(e.value, style: const TextStyle(fontSize: 12)),
+                );
+              }).toList(),
+              selected: {_locationPref},
+              onSelectionChanged: (sel) => _updateLocationPref(sel.first),
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
 
           // ── Neighbors ──
           if (_neighbors.isNotEmpty) ...[
@@ -179,6 +230,10 @@ class NeighborhoodPageState extends State<NeighborhoodPage> {
                   userId: neighbor['id'] as int,
                   name: neighbor['name'] as String?,
                   avatarUrl: neighbor['avatar_url'] as String?,
+                  city: neighbor['city'] as String?,
+                  state: neighbor['state'] as String?,
+                  budget: neighbor['budget'] as int?,
+                  moveInDate: neighbor['move_in_date'] as String?,
                   vibeLabels: List<String>.from(neighbor['vibe_labels'] ?? []),
                   similarityScore: (neighbor['similarity_score'] as num?)?.toDouble() ?? 0.0,
                 ),

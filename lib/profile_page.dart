@@ -696,6 +696,10 @@ class ProfilePageState extends State<ProfilePage> {
                                                     const InputDecoration(
                                                       hintText: 'Select state',
                                                     ),
+                                                validator: (v) =>
+                                                    v == null || v.isEmpty
+                                                        ? 'State is required'
+                                                        : null,
                                                 items:
                                                     states
                                                         .map(
@@ -724,6 +728,10 @@ class ProfilePageState extends State<ProfilePage> {
                                       decoration: const InputDecoration(
                                         hintText: 'Enter your city',
                                       ),
+                                      validator: (v) =>
+                                          v == null || v.trim().isEmpty
+                                              ? 'City is required'
+                                              : null,
                                     ),
                                     const SizedBox(height: 16),
 
