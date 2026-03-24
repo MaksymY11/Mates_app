@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'profile_page.dart';
 import 'apartment/apartment_builder_page.dart';
+import 'discovery/neighborhood_page.dart';
 
 /// Entry point for logged-in users.
 /// Shows a bottom nav with 5 tabs; the center (index 2) is the Home/Profiles feed.
@@ -16,10 +17,11 @@ class _HomeShellState extends State<HomeShell> {
   int _currentIndex = 2;
 
   final _profileKey = GlobalKey<ProfilePageState>();
+  final _discoveryKey = GlobalKey<NeighborhoodPageState>();
 
   // Keep pages alive with an IndexedStack
   late final List<Widget> _pages = [
-    const DiscoveryPage(),        // placeholder — Session 5: Neighborhoods
+    NeighborhoodPage(key: _discoveryKey),
     const ChatsPage(),
     const ApartmentBuilderPage(), // center
     const NotificationsPage(),
@@ -36,6 +38,7 @@ class _HomeShellState extends State<HomeShell> {
         currentIndex: _currentIndex,
         onTap: (i) {
           setState(() => _currentIndex = i);
+          if (i == 0) _discoveryKey.currentState?.refreshNeighborhood();
           if (i == 4) _profileKey.currentState?.refreshProfile();
         },
         items: const [
@@ -130,13 +133,6 @@ class _BottomNavItem {
 }
 
 /// -------- Pages (stubs — expanded in future sessions) --------
-
-class DiscoveryPage extends StatelessWidget {
-  const DiscoveryPage({super.key});
-  @override
-  Widget build(BuildContext context) =>
-      const _CenterLabel(icon: Icons.explore, label: 'Discover');
-}
 
 class ChatsPage extends StatelessWidget {
   const ChatsPage({super.key});

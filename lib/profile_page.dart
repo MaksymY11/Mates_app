@@ -550,7 +550,10 @@ class ProfilePageState extends State<ProfilePage> {
                                                           _avatarData!,
                                                         )
                                                         : null,
-                                                onBackgroundImageError: (_, __) {},
+                                                onBackgroundImageError:
+                                                    (_avatarThumbUrl != null || _avatarUrl != null || _avatarData != null)
+                                                        ? (_, __) {}
+                                                        : null,
                                                 child:
                                                     (_avatarThumbUrl == null &&
                                                             _avatarUrl ==
