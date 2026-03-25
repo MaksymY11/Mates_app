@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../services/apartment_service.dart';
 import '../services/vibe_service.dart';
 import '../services/scenario_service.dart';
+import '../services/quickpick_service.dart';
+import '../quickpicks/quick_pick_page.dart';
 import 'furniture_picker.dart' show iconFor;
 
 const List<String> _zoneKeys = [
@@ -55,6 +57,10 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
   List<dynamic> _scenarioComparisons = [];
   bool _scenariosLoaded = false;
 
+  // Interest/wave state
+  bool _waved = false;
+  bool _waving = false;
+
   int? _activeZone;
   late final AnimationController _zoomController;
   late Animation<double> _zoomAnimation;
@@ -85,10 +91,15 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
       final results = await Future.wait([
         ApartmentService.getUserApartment(widget.userId),
         ApartmentService.getCatalog(),
+        QuickPickService.getSentInterests(),
       ]);
 
       final apartment = results[0];
       final catalog = results[1];
+      final sentData = results[2];
+      final sentIds = Set<int>.from(
+        (sentData['sent_to'] as List<dynamic>? ?? []).map((e) => e as int),
+      );
 
       final lookup = <int, Map<String, dynamic>>{};
       for (final zoneEntry in catalog.entries) {
@@ -105,6 +116,7 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
         setState(() {
           _items = apartment['items'] as List<dynamic>? ?? [];
           _furnitureLookup = lookup;
+          _waved = sentIds.contains(widget.userId);
           _loading = false;
         });
         _fetchComparison();
@@ -148,6 +160,89 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
     } catch (_) {}
   }
 
+  Future<void> _toggleWave() async {
+    if (_waving) return;
+
+    if (_waved) {
+      setState(() => _waving = true);
+      try {
+        await QuickPickService.withdrawInterest(widget.userId);
+        if (mounted) {
+          setState(() { _waved = false; _waving = false; });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Withdrew wave from ${widget.userName ?? 'user'}')),
+          );
+        }
+      } catch (e) {
+        if (mounted) setState(() => _waving = false);
+      }
+      return;
+    }
+
+    setState(() => _waving = true);
+    try {
+      final result = await QuickPickService.expressInterest(widget.userId);
+      if (!mounted) return;
+      setState(() { _waved = true; _waving = false; });
+      if (result['mutual'] == true) {
+        _showMutualDialog();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'You waved at ${widget.userName ?? 'them'}! If they wave back, you\'ll be matched.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _waving = false);
+    }
+  }
+
+  void _showMutualDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final brand = Theme.of(ctx).colorScheme.primary;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(Icons.celebration, color: brand),
+              const SizedBox(width: 8),
+              const Text('It\'s mutual!'),
+            ],
+          ),
+          content: Text(
+            '${widget.userName ?? "They"} waved back! Answer 5 quick questions to break the ice.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Later'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => QuickPickPage(
+                      otherUserId: widget.userId,
+                      otherUserName: widget.userName,
+                    ),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: brand, foregroundColor: Colors.white),
+              child: const Text('Quick Picks'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   List<dynamic> _itemsForZone(String zone) {
     return _items
         .where((item) => (item as Map<String, dynamic>)['zone'] == zone)
@@ -175,6 +270,16 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
       appBar: AppBar(
         title: Text(title),
         centerTitle: true,
+        actions: [
+          IconButton(
+            onPressed: _waving ? null : _toggleWave,
+            tooltip: _waved ? 'Withdraw wave' : 'Wave',
+            icon: Icon(
+              _waved ? Icons.waving_hand : Icons.waving_hand_outlined,
+              color: _waved ? Colors.amber[700] : null,
+            ),
+          ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

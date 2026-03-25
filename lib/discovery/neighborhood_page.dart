@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../services/discovery_service.dart';
+import '../services/quickpick_service.dart';
 import 'neighbor_card.dart';
 import 'neighborhood_card.dart';
 
@@ -20,6 +21,7 @@ class NeighborhoodPageState extends State<NeighborhoodPage> {
   double _mySimilarity = 0.0;
   List<dynamic> _neighbors = [];
   List<dynamic> _nearby = [];
+  Set<int> _sentInterestIds = {};
 
   static const _prefLabels = {
     'same_city': 'Same city',
@@ -47,11 +49,13 @@ class NeighborhoodPageState extends State<NeighborhoodPage> {
         ApiService.get('/me'),
         DiscoveryService.getNeighborhood(),
         DiscoveryService.getNearby(),
+        QuickPickService.getSentInterests(),
       ]);
 
       final me = results[0];
       final hoodData = results[1];
       final nearbyData = results[2];
+      final sentData = results[3];
 
       if (mounted) {
         setState(() {
@@ -60,6 +64,9 @@ class NeighborhoodPageState extends State<NeighborhoodPage> {
           _mySimilarity = (hoodData['my_similarity_score'] as num?)?.toDouble() ?? 0.0;
           _neighbors = hoodData['neighbors'] as List<dynamic>? ?? [];
           _nearby = nearbyData['nearby'] as List<dynamic>? ?? [];
+          _sentInterestIds = Set<int>.from(
+            (sentData['sent_to'] as List<dynamic>? ?? []).map((e) => e as int),
+          );
           _loading = false;
         });
       }
@@ -236,6 +243,7 @@ class NeighborhoodPageState extends State<NeighborhoodPage> {
                   moveInDate: neighbor['move_in_date'] as String?,
                   vibeLabels: List<String>.from(neighbor['vibe_labels'] ?? []),
                   similarityScore: (neighbor['similarity_score'] as num?)?.toDouble() ?? 0.0,
+                  initialWaved: _sentInterestIds.contains(neighbor['id'] as int),
                 ),
               );
             }),
@@ -292,6 +300,7 @@ class NeighborhoodPageState extends State<NeighborhoodPage> {
                   vibeDescription: hood['vibe_description'] as String? ?? '',
                   memberCount: hood['member_count'] as int? ?? 0,
                   sampleMembers: hood['sample_members'] as List<dynamic>? ?? [],
+                  sentInterestIds: _sentInterestIds,
                 ),
               );
             }),

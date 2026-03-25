@@ -7,6 +7,7 @@ class NeighborhoodCard extends StatefulWidget {
   final String vibeDescription;
   final int memberCount;
   final List<dynamic> sampleMembers;
+  final Set<int> sentInterestIds;
 
   const NeighborhoodCard({
     super.key,
@@ -15,6 +16,7 @@ class NeighborhoodCard extends StatefulWidget {
     required this.vibeDescription,
     required this.memberCount,
     required this.sampleMembers,
+    this.sentInterestIds = const {},
   });
 
   @override
@@ -106,6 +108,7 @@ class _NeighborhoodCardState extends State<NeighborhoodCard> {
                     moveInDate: member['move_in_date'] as String?,
                     vibeLabels: List<String>.from(member['vibe_labels'] ?? []),
                     similarityScore: (member['similarity_score'] as num?)?.toDouble() ?? 0.0,
+                    initialWaved: widget.sentInterestIds.contains(member['id'] as int),
                   ),
                 );
               }),
