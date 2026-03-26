@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/quickpick_service.dart';
+import '../services/household_service.dart';
 
 /// Shows side-by-side results for a completed Quick Picks session.
 ///
@@ -29,6 +30,7 @@ class _QuickPickResultsPageState extends State<QuickPickResultsPage> {
   int _total = 0;
   List<dynamic> _comparisons = [];
   Map<String, dynamic> _otherUser = {};
+  bool _canInviteToHousehold = false;
 
   @override
   void initState() {
@@ -48,12 +50,45 @@ class _QuickPickResultsPageState extends State<QuickPickResultsPage> {
         _otherUser = data['other_user'] as Map<String, dynamic>? ?? {};
         _loading = false;
       });
+      _checkHouseholdInviteEligibility();
     } catch (e) {
       if (mounted) {
         setState(() {
           _error = '$e';
           _loading = false;
         });
+      }
+    }
+  }
+
+  Future<void> _checkHouseholdInviteEligibility() async {
+    try {
+      final data = await HouseholdService.getMyHousehold();
+      final household = data['household'];
+      if (household == null || !mounted) return;
+      // Check if the other user is in the eligible list
+      final eligData = await HouseholdService.getEligibleConnections();
+      final eligible = eligData['eligible'] as List<dynamic>? ?? [];
+      final otherId = _otherUser['id'];
+      final canInvite = eligible.any((u) => (u as Map)['id'] == otherId);
+      if (mounted) setState(() => _canInviteToHousehold = canInvite);
+    } catch (_) {}
+  }
+
+  Future<void> _inviteToHousehold() async {
+    final otherId = _otherUser['id'] as int?;
+    if (otherId == null) return;
+    try {
+      await HouseholdService.inviteUser(otherId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invite sent to ${_otherUser['name'] ?? 'them'}!')),
+        );
+        setState(() => _canInviteToHousehold = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
@@ -293,6 +328,25 @@ class _QuickPickResultsPageState extends State<QuickPickResultsPage> {
         children: [
           const Divider(),
           const SizedBox(height: 16),
+          if (_canInviteToHousehold) ...[
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _inviteToHousehold,
+                icon: const Icon(Icons.groups_rounded),
+                label: const Text('Invite to Household'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  backgroundColor: brand,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(

@@ -3,6 +3,7 @@ import 'profile_page.dart';
 import 'apartment/apartment_builder_page.dart';
 import 'discovery/neighborhood_page.dart';
 import 'quickpicks/matches_page.dart';
+import 'household/household_page.dart';
 import 'services/quickpick_service.dart';
 
 /// Entry point for logged-in users.
@@ -18,17 +19,19 @@ class _HomeShellState extends State<HomeShell> {
   // Apartment builder is the default landing tab (center)
   int _currentIndex = 2;
   bool _hasMatchBadge = false;
+  bool _hasHouseholdBadge = false;
 
   final _profileKey = GlobalKey<ProfilePageState>();
   final _discoveryKey = GlobalKey<NeighborhoodPageState>();
   final _matchesKey = GlobalKey<MatchesPageState>();
+  final _householdKey = GlobalKey<HouseholdPageState>();
 
   // Keep pages alive with an IndexedStack
   late final List<Widget> _pages = [
     NeighborhoodPage(key: _discoveryKey),
     MatchesPage(key: _matchesKey),
     const ApartmentBuilderPage(), // center
-    const NotificationsPage(),
+    HouseholdPage(key: _householdKey),
     ProfilePage(key: _profileKey),
   ];
 
@@ -36,6 +39,7 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     _checkMatchBadge();
+    _checkHouseholdBadge();
   }
 
   /// Checks for any mutual matches with pending Quick Picks.
@@ -52,6 +56,15 @@ class _HomeShellState extends State<HomeShell> {
     } catch (_) {}
   }
 
+  Future<void> _checkHouseholdBadge() async {
+    try {
+      // Check after household page has loaded — use its state directly
+      await Future.delayed(const Duration(milliseconds: 500));
+      final hasActions = _householdKey.currentState?.hasPendingActions ?? false;
+      if (mounted) setState(() => _hasHouseholdBadge = hasActions);
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     final brand = Theme.of(context).colorScheme.primary;
@@ -64,8 +77,10 @@ class _HomeShellState extends State<HomeShell> {
           setState(() => _currentIndex = i);
           if (i == 0) _discoveryKey.currentState?.refreshNeighborhood();
           if (i == 1) _matchesKey.currentState?.refreshMatches();
+          if (i == 3) _householdKey.currentState?.refreshHousehold();
           if (i == 4) _profileKey.currentState?.refreshProfile();
           _checkMatchBadge();
+          _checkHouseholdBadge();
         },
         items: [
           const _BottomNavItem(icon: Icons.explore, semanticLabel: 'Discover'),
@@ -75,7 +90,11 @@ class _HomeShellState extends State<HomeShell> {
             showBadge: _hasMatchBadge,
           ),
           const _BottomNavItem(icon: Icons.home_rounded, semanticLabel: 'Apartment'),
-          const _BottomNavItem(icon: Icons.notifications, semanticLabel: 'Alerts'),
+          _BottomNavItem(
+            icon: Icons.groups_rounded,
+            semanticLabel: 'Household',
+            showBadge: _hasHouseholdBadge,
+          ),
           const _BottomNavItem(icon: Icons.person, semanticLabel: 'Profile'),
         ],
         selectedScale: 1.25,
@@ -176,38 +195,4 @@ class _BottomNavItem {
   final String semanticLabel;
   final bool showBadge;
   const _BottomNavItem({required this.icon, required this.semanticLabel, this.showBadge = false});
-}
-
-/// -------- Pages (stubs — expanded in future sessions) --------
-
-class NotificationsPage extends StatelessWidget {
-  const NotificationsPage({super.key});
-  @override
-  Widget build(BuildContext context) =>
-      const _CenterLabel(icon: Icons.notifications, label: 'Notifications');
-}
-
-class _CenterLabel extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  const _CenterLabel({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final brand = Theme.of(context).colorScheme.primary;
-
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 40, color: brand),
-          const SizedBox(height: 12),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
 }
