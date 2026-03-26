@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'profile_page.dart';
 import 'apartment/apartment_builder_page.dart';
@@ -5,6 +6,8 @@ import 'discovery/neighborhood_page.dart';
 import 'quickpicks/matches_page.dart';
 import 'household/household_page.dart';
 import 'services/quickpick_service.dart';
+import 'services/messaging_service.dart';
+import 'services/websocket_service.dart';
 
 /// Entry point for logged-in users.
 /// Shows a bottom nav with 5 tabs; the center (index 2) is the Home/Profiles feed.
@@ -20,6 +23,7 @@ class _HomeShellState extends State<HomeShell> {
   int _currentIndex = 2;
   bool _hasMatchBadge = false;
   bool _hasHouseholdBadge = false;
+  StreamSubscription? _wsSub;
 
   final _profileKey = GlobalKey<ProfilePageState>();
   final _discoveryKey = GlobalKey<NeighborhoodPageState>();
@@ -40,19 +44,45 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     _checkMatchBadge();
     _checkHouseholdBadge();
+    WebSocketService.instance.connect();
+    _wsSub = WebSocketService.instance.messages.listen((data) {
+      if (data['type'] == 'message') {
+        // Refresh badges when a new message arrives
+        _checkMatchBadge();
+        _checkHouseholdBadge();
+      }
+    });
   }
 
-  /// Checks for any mutual matches with pending Quick Picks.
+  @override
+  void dispose() {
+    _wsSub?.cancel();
+    WebSocketService.instance.disconnect();
+    super.dispose();
+  }
+
+  /// Checks for any mutual matches with pending Quick Picks or unread DMs.
   /// Shows a badge dot on the Matches tab so the user knows to look there.
   Future<void> _checkMatchBadge() async {
     try {
       final data = await QuickPickService.getMutualInterests();
       final matches = data['matches'] as List<dynamic>? ?? [];
-      // Badge shows when user has Quick Picks to answer or unviewed results
-      final hasPending = matches.any((m) {
+      final hasPendingQP = matches.any((m) {
         return (m as Map<String, dynamic>)['my_action_needed'] == true;
       });
-      if (mounted) setState(() => _hasMatchBadge = hasPending);
+
+      // Also check unread DM conversations
+      bool hasUnreadDm = false;
+      try {
+        final convData = await MessagingService.getConversations();
+        final convs = convData['conversations'] as List<dynamic>? ?? [];
+        hasUnreadDm = convs.any((c) {
+          final m = c as Map<String, dynamic>;
+          return m['type'] == 'dm' && (m['unread_count'] as int? ?? 0) > 0;
+        });
+      } catch (_) {}
+
+      if (mounted) setState(() => _hasMatchBadge = hasPendingQP || hasUnreadDm);
     } catch (_) {}
   }
 
@@ -61,7 +91,19 @@ class _HomeShellState extends State<HomeShell> {
       // Check after household page has loaded — use its state directly
       await Future.delayed(const Duration(milliseconds: 500));
       final hasActions = _householdKey.currentState?.hasPendingActions ?? false;
-      if (mounted) setState(() => _hasHouseholdBadge = hasActions);
+
+      // Also check unread group messages
+      bool hasUnreadGroup = false;
+      try {
+        final convData = await MessagingService.getConversations();
+        final convs = convData['conversations'] as List<dynamic>? ?? [];
+        hasUnreadGroup = convs.any((c) {
+          final m = c as Map<String, dynamic>;
+          return m['type'] == 'group' && (m['unread_count'] as int? ?? 0) > 0;
+        });
+      } catch (_) {}
+
+      if (mounted) setState(() => _hasHouseholdBadge = hasActions || hasUnreadGroup);
     } catch (_) {}
   }
 

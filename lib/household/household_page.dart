@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/household_service.dart';
+import '../messaging/conversation_page.dart';
 
 /// Household tab — replaces the Notifications stub.
 ///
@@ -307,6 +308,7 @@ class HouseholdPageState extends State<HouseholdPage>
     final members = (_household!['members'] as List<dynamic>?) ?? [];
     final rules = (_household!['rules'] as List<dynamic>?) ?? [];
     final householdId = _household!['id'] as int;
+    final conversationId = _household!['conversation_id'] as int?;
 
     // Split rules by status
     final accepted = rules.where((r) => (r as Map)['status'] == 'accepted').toList();
@@ -320,6 +322,24 @@ class HouseholdPageState extends State<HouseholdPage>
         appBar: AppBar(
           title: Text(name),
           centerTitle: true,
+          actions: [
+            if (conversationId != null)
+              IconButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ConversationPage(
+                        conversationId: conversationId,
+                        title: name,
+                        isGroup: true,
+                      ),
+                    ),
+                  );
+                },
+                icon: Icon(Icons.chat_rounded, color: brand),
+                tooltip: 'Group Chat',
+              ),
+          ],
           bottom: TabBar(
             controller: _tabController,
             indicatorColor: brand,

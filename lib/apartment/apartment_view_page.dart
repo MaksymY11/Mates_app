@@ -4,6 +4,7 @@ import '../services/apartment_service.dart';
 import '../services/vibe_service.dart';
 import '../services/scenario_service.dart';
 import '../services/quickpick_service.dart';
+import '../services/household_service.dart';
 import '../quickpicks/quick_pick_page.dart';
 import 'furniture_picker.dart' show iconFor;
 
@@ -60,6 +61,9 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
   // Interest/wave state
   bool _waved = false;
   bool _waving = false;
+
+  // Household invite
+  bool _canInviteToHousehold = false;
 
   int? _activeZone;
   late final AnimationController _zoomController;
@@ -120,6 +124,7 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
           _loading = false;
         });
         _fetchComparison();
+        _checkHouseholdInviteEligibility();
       }
     } catch (e) {
       if (mounted) {
@@ -158,6 +163,36 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
         });
       }
     } catch (_) {}
+  }
+
+  Future<void> _checkHouseholdInviteEligibility() async {
+    try {
+      final results = await Future.wait([
+        HouseholdService.getMyHousehold(),
+        HouseholdService.getEligibleConnections(),
+      ]);
+      final household = results[0]['household'];
+      if (household == null || !mounted) return;
+      final eligible = results[1]['eligible'] as List<dynamic>? ?? [];
+      final canInvite = eligible.any((u) => (u as Map)['id'] == widget.userId);
+      if (mounted) setState(() => _canInviteToHousehold = canInvite);
+    } catch (_) {}
+  }
+
+  Future<void> _inviteToHousehold() async {
+    try {
+      await HouseholdService.inviteUser(widget.userId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invite sent to ${widget.userName ?? 'them'}!')),
+        );
+        setState(() => _canInviteToHousehold = false);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
   }
 
   Future<void> _toggleWave() async {
@@ -271,6 +306,12 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
         title: Text(title),
         centerTitle: true,
         actions: [
+          if (_canInviteToHousehold)
+            IconButton(
+              onPressed: _inviteToHousehold,
+              tooltip: 'Invite to Household',
+              icon: const Icon(Icons.group_add_rounded),
+            ),
           IconButton(
             onPressed: _waving ? null : _toggleWave,
             tooltip: _waved ? 'Withdraw wave' : 'Wave',

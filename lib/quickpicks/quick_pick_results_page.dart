@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/quickpick_service.dart';
 import '../services/household_service.dart';
+import '../services/messaging_service.dart';
+import '../messaging/conversation_page.dart';
 
 /// Shows side-by-side results for a completed Quick Picks session.
 ///
@@ -40,17 +42,27 @@ class _QuickPickResultsPageState extends State<QuickPickResultsPage> {
 
   Future<void> _loadResults() async {
     try {
-      final data = await QuickPickService.getResults(widget.sessionId);
+      // Fire results + household data in parallel so both CTAs appear together
+      final futures = await Future.wait([
+        QuickPickService.getResults(widget.sessionId),
+        _fetchEligibleIds(),
+      ]);
       if (!mounted) return;
+
+      final data = futures[0] as Map<String, dynamic>;
+      final eligibleIds = futures[1] as Set<int>;
+      final otherUser = data['other_user'] as Map<String, dynamic>? ?? {};
+      final otherId = otherUser['id'] as int?;
+
       setState(() {
         _summary = data['summary'] as String? ?? '';
         _agreeCount = data['agree_count'] as int? ?? 0;
         _total = data['total'] as int? ?? 0;
         _comparisons = data['comparisons'] as List<dynamic>? ?? [];
-        _otherUser = data['other_user'] as Map<String, dynamic>? ?? {};
+        _otherUser = otherUser;
+        _canInviteToHousehold = otherId != null && eligibleIds.contains(otherId);
         _loading = false;
       });
-      _checkHouseholdInviteEligibility();
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -61,18 +73,21 @@ class _QuickPickResultsPageState extends State<QuickPickResultsPage> {
     }
   }
 
-  Future<void> _checkHouseholdInviteEligibility() async {
+  /// Returns the set of user IDs eligible for household invite.
+  /// Returns empty set if user has no household.
+  Future<Set<int>> _fetchEligibleIds() async {
     try {
-      final data = await HouseholdService.getMyHousehold();
-      final household = data['household'];
-      if (household == null || !mounted) return;
-      // Check if the other user is in the eligible list
-      final eligData = await HouseholdService.getEligibleConnections();
-      final eligible = eligData['eligible'] as List<dynamic>? ?? [];
-      final otherId = _otherUser['id'];
-      final canInvite = eligible.any((u) => (u as Map)['id'] == otherId);
-      if (mounted) setState(() => _canInviteToHousehold = canInvite);
-    } catch (_) {}
+      final results = await Future.wait([
+        HouseholdService.getMyHousehold(),
+        HouseholdService.getEligibleConnections(),
+      ]);
+      final household = results[0]['household'];
+      if (household == null) return {};
+      final eligible = results[1]['eligible'] as List<dynamic>? ?? [];
+      return eligible.map((u) => (u as Map)['id'] as int).toSet();
+    } catch (_) {
+      return {};
+    }
   }
 
   Future<void> _inviteToHousehold() async {
@@ -350,25 +365,42 @@ class _QuickPickResultsPageState extends State<QuickPickResultsPage> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: null, // Disabled — messaging not built yet
+              onPressed: () async {
+                final otherId = _otherUser['id'] as int?;
+                if (otherId == null) return;
+                try {
+                  final result = await MessagingService.createDm(otherId);
+                  if (!mounted) return;
+                  final convId = result['conversation_id'] as int;
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ConversationPage(
+                        conversationId: convId,
+                        title: widget.otherUserName ?? _otherUser['name'] ?? 'Chat',
+                        avatarUrl: _otherUser['avatar_url'] as String?,
+                        otherUserId: otherId,
+                      ),
+                    ),
+                  );
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('$e')),
+                    );
+                  }
+                }
+              },
               icon: const Icon(Icons.chat_bubble_outline),
               label: const Text('Start a conversation'),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 backgroundColor: brand,
                 foregroundColor: Colors.white,
-                disabledBackgroundColor: Colors.grey[300],
-                disabledForegroundColor: Colors.grey[500],
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Messaging coming soon!',
-            style: TextStyle(fontSize: 12, color: Colors.grey[500]),
           ),
         ],
       ),
