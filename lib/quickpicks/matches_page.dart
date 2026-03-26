@@ -19,6 +19,7 @@ class MatchesPage extends StatefulWidget {
 
 class MatchesPageState extends State<MatchesPage> {
   bool _loading = true;
+  String? _error;
   List<dynamic> _matches = [];
 
   @override
@@ -38,11 +39,15 @@ class MatchesPageState extends State<MatchesPage> {
       if (!mounted) return;
       setState(() {
         _matches = data['matches'] as List<dynamic>? ?? [];
+        _error = null;
         _loading = false;
       });
     } catch (e) {
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() {
+          _error = 'Could not load matches. Pull to retry.';
+          _loading = false;
+        });
       }
     }
   }
@@ -59,8 +64,10 @@ class MatchesPageState extends State<MatchesPage> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _matches.isEmpty
-              ? _buildEmptyState(brand)
+          : _error != null
+              ? _buildErrorState(brand)
+              : _matches.isEmpty
+                  ? _buildEmptyState(brand)
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.separated(
@@ -73,6 +80,36 @@ class MatchesPageState extends State<MatchesPage> {
                     },
                   ),
                 ),
+    );
+  }
+
+  Widget _buildErrorState(Color brand) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off_rounded, size: 56, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: () {
+                setState(() { _loading = true; _error = null; });
+                _load();
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+              style: OutlinedButton.styleFrom(foregroundColor: brand),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -142,6 +179,14 @@ class MatchesPageState extends State<MatchesPage> {
               ),
             ),
           );
+        } else if (sessionStatus != null && !myActionNeeded) {
+          // User already answered — other user hasn't finished yet.
+          // Show a snackbar instead of navigating to QuickPickPage where
+          // they'd just see the same "waiting" screen with a loading flash.
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Waiting for $name to finish their answers')),
+          );
+          return;
         } else {
           await Navigator.of(context).push(
             MaterialPageRoute(

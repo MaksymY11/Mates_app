@@ -144,8 +144,8 @@ class _NeighborCardState extends State<NeighborCard> {
     final pct = (widget.similarityScore * 100).round();
 
     return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
+      onTap: () async {
+        await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => ApartmentViewPage(
               userId: widget.userId,
@@ -153,6 +153,14 @@ class _NeighborCardState extends State<NeighborCard> {
             ),
           ),
         );
+        // Refresh wave state in case user waved from ApartmentViewPage
+        try {
+          final sent = await QuickPickService.getSentInterests();
+          if (mounted) {
+            final sentTo = List<int>.from(sent['sent_to'] ?? []);
+            setState(() => _waved = sentTo.contains(widget.userId));
+          }
+        } catch (_) {}
       },
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -242,7 +250,9 @@ class _NeighborCardState extends State<NeighborCard> {
                     Icon(Icons.calendar_today, size: 12, color: Colors.grey[500]),
                     const SizedBox(width: 2),
                     Text(
-                      widget.moveInDate!.substring(0, 10),
+                      widget.moveInDate!.length >= 10
+                          ? widget.moveInDate!.substring(0, 10)
+                          : widget.moveInDate!,
                       style: TextStyle(fontSize: 11, color: Colors.grey[600]),
                     ),
                   ],

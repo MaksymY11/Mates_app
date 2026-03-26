@@ -32,6 +32,7 @@ class _QuickPickPageState extends State<QuickPickPage> {
   Map<String, dynamic> _myAnswers = {}; // question_index (as string) → option
   int _currentIndex = 0;
   bool _submitting = false;
+  bool _navigatedToResults = false;
 
   // Countdown timer (decorative, 60s total)
   Timer? _timer;
@@ -50,6 +51,7 @@ class _QuickPickPageState extends State<QuickPickPage> {
   }
 
   void _startTimer() {
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
         t.cancel();
@@ -134,7 +136,8 @@ class _QuickPickPageState extends State<QuickPickPage> {
   }
 
   void _navigateToResults() {
-    if (_sessionId == null) return;
+    if (_sessionId == null || _navigatedToResults) return;
+    _navigatedToResults = true;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => QuickPickResultsPage(
