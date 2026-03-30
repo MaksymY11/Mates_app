@@ -44,7 +44,7 @@ class MyApp extends StatelessWidget {
         ),
         iconTheme: const IconThemeData(color: brand),
       ),
-      home: kIsWeb ? const LandingPage() : LoginPage(),
+      home: LoginPage(),
     );
   }
 }
