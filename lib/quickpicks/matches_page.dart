@@ -34,7 +34,7 @@ class MatchesPageState extends State<MatchesPage> {
     super.initState();
     _load();
     _wsSub = WebSocketService.instance.messages.listen((data) {
-      if (data['type'] == 'message') {
+      if (data['type'] == 'message' || data['type'] == 'notification') {
         _load();
       }
     });
@@ -110,7 +110,7 @@ class MatchesPageState extends State<MatchesPage> {
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? _buildErrorState(brand)
-              : _matches.isEmpty
+              : (_matches.isEmpty && _dmConversations.isEmpty)
                   ? _buildEmptyState(brand)
               : RefreshIndicator(
                   onRefresh: _load,

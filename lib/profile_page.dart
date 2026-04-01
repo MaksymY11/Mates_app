@@ -481,6 +481,11 @@ class ProfilePageState extends State<ProfilePage> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Profile'),
+        backgroundColor: kBrand,
+        foregroundColor: Colors.white,
+      ),
       body: Stack(
         children: [
           // Gradient background (ends around top-half)

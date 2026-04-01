@@ -5,12 +5,12 @@ import 'apartment/apartment_builder_page.dart';
 import 'discovery/neighborhood_page.dart';
 import 'quickpicks/matches_page.dart';
 import 'household/household_page.dart';
-import 'services/quickpick_service.dart';
-import 'services/messaging_service.dart';
+import 'notifications/notifications_page.dart';
+import 'services/notification_service.dart';
 import 'services/websocket_service.dart';
 
 /// Entry point for logged-in users.
-/// Shows a bottom nav with 5 tabs; the center (index 2) is the Home/Profiles feed.
+/// Shows a bottom nav with 5 tabs; the center (index 2) is the Apartment builder.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -21,35 +21,43 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   // Apartment builder is the default landing tab (center)
   int _currentIndex = 2;
-  bool _hasMatchBadge = false;
-  bool _hasHouseholdBadge = false;
+  int _unreadNotificationCount = 0;
   StreamSubscription? _wsSub;
 
-  final _profileKey = GlobalKey<ProfilePageState>();
   final _discoveryKey = GlobalKey<NeighborhoodPageState>();
   final _matchesKey = GlobalKey<MatchesPageState>();
   final _householdKey = GlobalKey<HouseholdPageState>();
+  final _notificationsKey = GlobalKey<NotificationsPageState>();
 
-  // Keep pages alive with an IndexedStack
   late final List<Widget> _pages = [
     NeighborhoodPage(key: _discoveryKey),
     MatchesPage(key: _matchesKey),
     const ApartmentBuilderPage(), // center
     HouseholdPage(key: _householdKey),
-    ProfilePage(key: _profileKey),
+    NotificationsPage(
+      key: _notificationsKey,
+      onSwitchTab: (idx) => setState(() => _currentIndex = idx),
+    ),
   ];
 
   @override
   void initState() {
     super.initState();
-    _checkMatchBadge();
-    _checkHouseholdBadge();
+    _fetchUnreadCount();
     WebSocketService.instance.connect();
     _wsSub = WebSocketService.instance.messages.listen((data) {
-      if (data['type'] == 'message') {
-        // Refresh badges when a new message arrives
-        _checkMatchBadge();
-        _checkHouseholdBadge();
+      if (data['type'] == 'notification' && mounted) {
+        setState(() => _unreadNotificationCount++);
+        // Show snackbar if not already on the Notifications tab
+        if (_currentIndex != 4) {
+          final notif = data['notification'] as Map<String, dynamic>?;
+          final title = notif?['title'] as String? ?? 'New notification';
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(title), duration: const Duration(seconds: 3)),
+            );
+          }
+        }
       }
     });
   }
@@ -61,49 +69,14 @@ class _HomeShellState extends State<HomeShell> {
     super.dispose();
   }
 
-  /// Checks for any mutual matches with pending Quick Picks or unread DMs.
-  /// Shows a badge dot on the Matches tab so the user knows to look there.
-  Future<void> _checkMatchBadge() async {
+  Future<void> _fetchUnreadCount() async {
     try {
-      final data = await QuickPickService.getMutualInterests();
-      final matches = data['matches'] as List<dynamic>? ?? [];
-      final hasPendingQP = matches.any((m) {
-        return (m as Map<String, dynamic>)['my_action_needed'] == true;
-      });
-
-      // Also check unread DM conversations
-      bool hasUnreadDm = false;
-      try {
-        final convData = await MessagingService.getConversations();
-        final convs = convData['conversations'] as List<dynamic>? ?? [];
-        hasUnreadDm = convs.any((c) {
-          final m = c as Map<String, dynamic>;
-          return m['type'] == 'dm' && (m['unread_count'] as int? ?? 0) > 0;
+      final data = await NotificationService.getNotifications(limit: 1);
+      if (mounted) {
+        setState(() {
+          _unreadNotificationCount = data['unread_count'] as int? ?? 0;
         });
-      } catch (_) {}
-
-      if (mounted) setState(() => _hasMatchBadge = hasPendingQP || hasUnreadDm);
-    } catch (_) {}
-  }
-
-  Future<void> _checkHouseholdBadge() async {
-    try {
-      // Check after household page has loaded — use its state directly
-      await Future.delayed(const Duration(milliseconds: 500));
-      final hasActions = _householdKey.currentState?.hasPendingActions ?? false;
-
-      // Also check unread group messages
-      bool hasUnreadGroup = false;
-      try {
-        final convData = await MessagingService.getConversations();
-        final convs = convData['conversations'] as List<dynamic>? ?? [];
-        hasUnreadGroup = convs.any((c) {
-          final m = c as Map<String, dynamic>;
-          return m['type'] == 'group' && (m['unread_count'] as int? ?? 0) > 0;
-        });
-      } catch (_) {}
-
-      if (mounted) setState(() => _hasHouseholdBadge = hasActions || hasUnreadGroup);
+      }
     } catch (_) {}
   }
 
@@ -112,32 +85,56 @@ class _HomeShellState extends State<HomeShell> {
     final brand = Theme.of(context).colorScheme.primary;
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Mates'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Profile & Settings',
+            onPressed: () {
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const ProfilePage()));
+            },
+          ),
+        ],
+      ),
       body: IndexedStack(index: _currentIndex, children: _pages),
       bottomNavigationBar: _BottomNav(
         currentIndex: _currentIndex,
         onTap: (i) {
+          // Mark notifications as read when leaving the Notifications tab
+          if (_currentIndex == 4 && i != 4) {
+            _notificationsKey.currentState?.markAllAsRead();
+          }
           setState(() => _currentIndex = i);
           if (i == 0) _discoveryKey.currentState?.refreshNeighborhood();
           if (i == 1) _matchesKey.currentState?.refreshMatches();
           if (i == 3) _householdKey.currentState?.refreshHousehold();
-          if (i == 4) _profileKey.currentState?.refreshProfile();
-          _checkMatchBadge();
-          _checkHouseholdBadge();
+          if (i == 4) {
+            _notificationsKey.currentState?.refreshNotifications();
+            setState(() => _unreadNotificationCount = 0);
+          }
         },
         items: [
           const _BottomNavItem(icon: Icons.explore, semanticLabel: 'Discover'),
-          _BottomNavItem(
+          const _BottomNavItem(
             icon: Icons.handshake_rounded,
             semanticLabel: 'Matches',
-            showBadge: _hasMatchBadge,
           ),
-          const _BottomNavItem(icon: Icons.home_rounded, semanticLabel: 'Apartment'),
-          _BottomNavItem(
+          const _BottomNavItem(
+            icon: Icons.home_rounded,
+            semanticLabel: 'Apartment',
+          ),
+          const _BottomNavItem(
             icon: Icons.groups_rounded,
             semanticLabel: 'Household',
-            showBadge: _hasHouseholdBadge,
           ),
-          const _BottomNavItem(icon: Icons.person, semanticLabel: 'Profile'),
+          _BottomNavItem(
+            icon: Icons.notifications,
+            semanticLabel: 'Notifications',
+            showBadge: _unreadNotificationCount > 0,
+          ),
         ],
         selectedScale: 1.25,
         unselectedScale: 1.0,
@@ -236,5 +233,10 @@ class _BottomNavItem {
   final IconData icon;
   final String semanticLabel;
   final bool showBadge;
-  const _BottomNavItem({required this.icon, required this.semanticLabel, this.showBadge = false});
+  const _BottomNavItem({
+    required this.icon,
+    required this.semanticLabel,
+    this.showBadge = false,
+  });
 }
+
