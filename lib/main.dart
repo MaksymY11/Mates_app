@@ -1,8 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'services/api_service.dart';
 import 'login_page.dart';
-import 'landing_page.dart';
+// import 'landing_page.dart';
 
 void main() {
   runApp(const MyApp());

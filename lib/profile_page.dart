@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'services/api_service.dart';
 import 'services/vibe_service.dart';
 import 'services/scenario_service.dart';
+import 'utils/us_cities.dart';
 
 const Color kBrand = Color(0xFF4CAF50);
 const Color kBrandLight = Color(0xFF7CFF7C);
@@ -723,15 +724,42 @@ class ProfilePageState extends State<ProfilePage> {
                                     const SizedBox(height: 16),
 
                                     _label('City'),
-                                    TextFormField(
-                                      controller: _cityCtrl,
-                                      decoration: const InputDecoration(
-                                        hintText: 'Enter your city',
-                                      ),
-                                      validator: (v) =>
-                                          v == null || v.trim().isEmpty
-                                              ? 'City is required'
-                                              : null,
+                                    Autocomplete<String>(
+                                      initialValue: TextEditingValue(text: _cityCtrl.text),
+                                      optionsBuilder: (textEditingValue) {
+                                        final query = textEditingValue.text.trim().toLowerCase();
+                                        if (query.isEmpty) return const Iterable<String>.empty();
+                                        final cities = _state != null
+                                            ? (usCitiesByState[_state] ?? allUsCities)
+                                            : allUsCities;
+                                        return cities.where(
+                                          (c) => c.toLowerCase().contains(query),
+                                        );
+                                      },
+                                      onSelected: (selection) {
+                                        _cityCtrl.text = selection;
+                                      },
+                                      fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+                                        // Sync the autocomplete's controller with our _cityCtrl
+                                        if (textController.text != _cityCtrl.text && _cityCtrl.text.isNotEmpty && textController.text.isEmpty) {
+                                          textController.text = _cityCtrl.text;
+                                        }
+                                        return TextFormField(
+                                          controller: textController,
+                                          focusNode: focusNode,
+                                          textCapitalization: TextCapitalization.words,
+                                          decoration: const InputDecoration(
+                                            hintText: 'Start typing your city...',
+                                            suffixIcon: Icon(Icons.location_city, size: 20),
+                                          ),
+                                          validator: (v) =>
+                                              v == null || v.trim().isEmpty
+                                                  ? 'City is required'
+                                                  : null,
+                                          onChanged: (v) => _cityCtrl.text = v,
+                                          onFieldSubmitted: (_) => onFieldSubmitted(),
+                                        );
+                                      },
                                     ),
                                     const SizedBox(height: 16),
 

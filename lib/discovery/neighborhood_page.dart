@@ -22,6 +22,7 @@ class NeighborhoodPageState extends State<NeighborhoodPage> {
   List<dynamic> _neighbors = [];
   List<dynamic> _nearby = [];
   Set<int> _sentInterestIds = {};
+  bool _missingLocation = false;
 
   static const _prefLabels = {
     'same_city': 'Same city',
@@ -45,20 +46,33 @@ class NeighborhoodPageState extends State<NeighborhoodPage> {
     });
 
     try {
+      final me = await ApiService.get('/me');
+      final city = (me['city'] as String?)?.trim() ?? '';
+      final state = (me['state'] as String?)?.trim() ?? '';
+
+      if (city.isEmpty || state.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _missingLocation = true;
+            _loading = false;
+          });
+        }
+        return;
+      }
+
       final results = await Future.wait([
-        ApiService.get('/me'),
         DiscoveryService.getNeighborhood(),
         DiscoveryService.getNearby(),
         QuickPickService.getSentInterests(),
       ]);
 
-      final me = results[0];
-      final hoodData = results[1];
-      final nearbyData = results[2];
-      final sentData = results[3];
+      final hoodData = results[0];
+      final nearbyData = results[1];
+      final sentData = results[2];
 
       if (mounted) {
         setState(() {
+          _missingLocation = false;
           _locationPref = (me['location_preference'] as String?) ?? 'same_city';
           _neighborhood = hoodData['neighborhood'] as Map<String, dynamic>? ?? {};
           _mySimilarity = (hoodData['my_similarity_score'] as num?)?.toDouble() ?? 0.0;
@@ -109,6 +123,31 @@ class NeighborhoodPageState extends State<NeighborhoodPage> {
               Text(_error!, textAlign: TextAlign.center),
               const SizedBox(height: 16),
               ElevatedButton(onPressed: _load, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_missingLocation) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.location_off_rounded, size: 56, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              const Text(
+                'Set your location first',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Head to your Profile and select your city and state so we can find neighbors near you.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              ),
             ],
           ),
         ),

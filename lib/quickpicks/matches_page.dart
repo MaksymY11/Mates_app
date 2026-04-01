@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../services/quickpick_service.dart';
 import '../services/messaging_service.dart';
 import '../services/api_service.dart';
+import '../services/websocket_service.dart';
 import '../messaging/conversation_page.dart';
 import 'quick_pick_page.dart';
 import 'quick_pick_results_page.dart';
@@ -25,11 +27,23 @@ class MatchesPageState extends State<MatchesPage> {
   List<dynamic> _matches = [];
   List<dynamic> _dmConversations = [];
   int? _currentUserId;
+  StreamSubscription? _wsSub;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _wsSub = WebSocketService.instance.messages.listen((data) {
+      if (data['type'] == 'message') {
+        _load();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _wsSub?.cancel();
+    super.dispose();
   }
 
   /// Called by HomeShell via GlobalKey on tab switch to keep data current.
