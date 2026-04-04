@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "725363533702",
+    "project_id": "mates-8238c",
+    "storage_bucket": "mates-8238c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:725363533702:android:1c63808e43273c578aee07",
+        "android_client_info": {
+          "package_name": "com.example.mates"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB72WUtD32Wb2lMNz0sdR8hD9mf_oOlJ3Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

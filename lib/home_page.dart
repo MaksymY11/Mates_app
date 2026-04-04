@@ -1,5 +1,11 @@
 import 'dart:async';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:mates/apartment/apartment_view_page.dart';
+import 'package:mates/messaging/conversation_page.dart';
+import 'package:mates/quickpicks/quick_pick_page.dart';
+import 'package:mates/quickpicks/quick_pick_results_page.dart';
+import 'package:mates/services/push_notification_service.dart';
 import 'profile_page.dart';
 import 'apartment/apartment_builder_page.dart';
 import 'discovery/neighborhood_page.dart';
@@ -45,6 +51,19 @@ class _HomeShellState extends State<HomeShell> {
     super.initState();
     _fetchUnreadCount();
     WebSocketService.instance.connect();
+    PushNotificationService.instance.initialize();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final data = PushNotificationService.pendingNotificationData;
+      PushNotificationService.pendingNotificationData = null;
+      if (data != null) {
+        _navigateFromNotification(data);
+      }
+    });
+    if (PushNotificationService.isSupported) {
+      FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        _navigateFromNotification(message.data);
+      });
+    }
     _wsSub = WebSocketService.instance.messages.listen((data) {
       if (data['type'] == 'notification' && mounted) {
         setState(() => _unreadNotificationCount++);
@@ -54,7 +73,10 @@ class _HomeShellState extends State<HomeShell> {
           final title = notif?['title'] as String? ?? 'New notification';
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(title), duration: const Duration(seconds: 3)),
+              SnackBar(
+                content: Text(title),
+                duration: const Duration(seconds: 3),
+              ),
             );
           }
         }
@@ -78,6 +100,71 @@ class _HomeShellState extends State<HomeShell> {
         });
       }
     } catch (_) {}
+  }
+
+  Future<void> _navigateFromNotification(Map<String, dynamic> data) async {
+    try {
+      final eventType = data['event_type'] as String?;
+      if (eventType == null) return;
+      switch (eventType) {
+        case 'wave_received':
+          final userId = int.tryParse(data['user_id']?.toString() ?? '');
+          if (userId != null) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ApartmentViewPage(userId: userId),
+              ),
+            );
+          }
+          break;
+
+        case 'match_unlocked':
+          final userId = int.tryParse(data['user_id']?.toString() ?? '');
+          if (userId != null) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => QuickPickPage(otherUserId: userId),
+              ),
+            );
+          }
+          break;
+
+        case 'quickpicks_completed':
+          final sessionId = int.tryParse(data['session_id']?.toString() ?? '');
+          if (sessionId != null) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => QuickPickResultsPage(sessionId: sessionId),
+              ),
+            );
+          }
+          break;
+
+        case 'household_invite':
+        case 'household_member_joined':
+        case 'rule_proposed':
+        case 'rule_resolved':
+        case 'removal_proposed':
+          setState(() => _currentIndex = 3);
+          break;
+
+        case 'new_dm_message':
+        case 'new_group_message':
+          final convId = int.tryParse(
+            data['conversation_id']?.toString() ?? '',
+          );
+          final title = (data['title'] ?? '');
+          if (convId != null) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder:
+                    (_) =>
+                        ConversationPage(conversationId: convId, title: title),
+              ),
+            );
+          }
+      }
+    } catch (e) {}
   }
 
   @override
@@ -239,4 +326,3 @@ class _BottomNavItem {
     this.showBadge = false,
   });
 }
-

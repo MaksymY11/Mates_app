@@ -1,9 +1,20 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'services/push_notification_service.dart';
+import 'package:mates/firebase_options.dart';
 import 'package:flutter/material.dart';
 import 'services/api_service.dart';
 import 'login_page.dart';
 // import 'landing_page.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  if (PushNotificationService.isSupported) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
+
   runApp(const MyApp());
 }
 

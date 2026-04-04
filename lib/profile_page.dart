@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'services/push_notification_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/api_service.dart';
@@ -450,8 +451,9 @@ class ProfilePageState extends State<ProfilePage> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
 
-      // Tell the server to invalidate the token
+      // Tell the server to invalidate the device and token
       if (token != null) {
+        await PushNotificationService.instance.unregisterDevice();
         await http.post(
           Uri.parse('${ApiService.baseUrl}/logout'),
           headers: {'Authorization': 'Bearer $token'},
@@ -557,7 +559,10 @@ class ProfilePageState extends State<ProfilePage> {
                                                         )
                                                         : null,
                                                 onBackgroundImageError:
-                                                    (_avatarThumbUrl != null || _avatarUrl != null || _avatarData != null)
+                                                    (_avatarThumbUrl != null ||
+                                                            _avatarUrl !=
+                                                                null ||
+                                                            _avatarData != null)
                                                         ? (_, __) {}
                                                         : null,
                                                 child:
@@ -702,10 +707,11 @@ class ProfilePageState extends State<ProfilePage> {
                                                     const InputDecoration(
                                                       hintText: 'Select state',
                                                     ),
-                                                validator: (v) =>
-                                                    v == null || v.isEmpty
-                                                        ? 'State is required'
-                                                        : null,
+                                                validator:
+                                                    (v) =>
+                                                        v == null || v.isEmpty
+                                                            ? 'State is required'
+                                                            : null,
                                                 items:
                                                     states
                                                         .map(
@@ -730,39 +736,63 @@ class ProfilePageState extends State<ProfilePage> {
 
                                     _label('City'),
                                     Autocomplete<String>(
-                                      initialValue: TextEditingValue(text: _cityCtrl.text),
+                                      initialValue: TextEditingValue(
+                                        text: _cityCtrl.text,
+                                      ),
                                       optionsBuilder: (textEditingValue) {
-                                        final query = textEditingValue.text.trim().toLowerCase();
-                                        if (query.isEmpty) return const Iterable<String>.empty();
-                                        final cities = _state != null
-                                            ? (usCitiesByState[_state] ?? allUsCities)
-                                            : allUsCities;
+                                        final query =
+                                            textEditingValue.text
+                                                .trim()
+                                                .toLowerCase();
+                                        if (query.isEmpty)
+                                          return const Iterable<String>.empty();
+                                        final cities =
+                                            _state != null
+                                                ? (usCitiesByState[_state] ??
+                                                    allUsCities)
+                                                : allUsCities;
                                         return cities.where(
-                                          (c) => c.toLowerCase().contains(query),
+                                          (c) =>
+                                              c.toLowerCase().contains(query),
                                         );
                                       },
                                       onSelected: (selection) {
                                         _cityCtrl.text = selection;
                                       },
-                                      fieldViewBuilder: (context, textController, focusNode, onFieldSubmitted) {
+                                      fieldViewBuilder: (
+                                        context,
+                                        textController,
+                                        focusNode,
+                                        onFieldSubmitted,
+                                      ) {
                                         // Sync the autocomplete's controller with our _cityCtrl
-                                        if (textController.text != _cityCtrl.text && _cityCtrl.text.isNotEmpty && textController.text.isEmpty) {
+                                        if (textController.text !=
+                                                _cityCtrl.text &&
+                                            _cityCtrl.text.isNotEmpty &&
+                                            textController.text.isEmpty) {
                                           textController.text = _cityCtrl.text;
                                         }
                                         return TextFormField(
                                           controller: textController,
                                           focusNode: focusNode,
-                                          textCapitalization: TextCapitalization.words,
+                                          textCapitalization:
+                                              TextCapitalization.words,
                                           decoration: const InputDecoration(
-                                            hintText: 'Start typing your city...',
-                                            suffixIcon: Icon(Icons.location_city, size: 20),
+                                            hintText:
+                                                'Start typing your city...',
+                                            suffixIcon: Icon(
+                                              Icons.location_city,
+                                              size: 20,
+                                            ),
                                           ),
-                                          validator: (v) =>
-                                              v == null || v.trim().isEmpty
-                                                  ? 'City is required'
-                                                  : null,
+                                          validator:
+                                              (v) =>
+                                                  v == null || v.trim().isEmpty
+                                                      ? 'City is required'
+                                                      : null,
                                           onChanged: (v) => _cityCtrl.text = v,
-                                          onFieldSubmitted: (_) => onFieldSubmitted(),
+                                          onFieldSubmitted:
+                                              (_) => onFieldSubmitted(),
                                         );
                                       },
                                     ),
@@ -865,7 +895,9 @@ class ProfilePageState extends State<ProfilePage> {
 
                                     if (_vibeLabels.isEmpty)
                                       Padding(
-                                        padding: const EdgeInsets.only(bottom: 8),
+                                        padding: const EdgeInsets.only(
+                                          bottom: 8,
+                                        ),
                                         child: Text(
                                           'Furnish your apartment to discover your vibe!',
                                           style: TextStyle(
@@ -878,21 +910,24 @@ class ProfilePageState extends State<ProfilePage> {
                                       Wrap(
                                         spacing: 8,
                                         runSpacing: 8,
-                                        children: _vibeLabels.map((label) {
-                                          return Chip(
-                                            label: Text(label),
-                                            backgroundColor: kBrandLight.withOpacity(0.25),
-                                            labelStyle: const TextStyle(
-                                              color: kBrand,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                            shape: StadiumBorder(
-                                              side: BorderSide(
-                                                color: kBrandLight.withOpacity(0.5),
-                                              ),
-                                            ),
-                                          );
-                                        }).toList(),
+                                        children:
+                                            _vibeLabels.map((label) {
+                                              return Chip(
+                                                label: Text(label),
+                                                backgroundColor: kBrandLight
+                                                    .withOpacity(0.25),
+                                                labelStyle: const TextStyle(
+                                                  color: kBrand,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                                shape: StadiumBorder(
+                                                  side: BorderSide(
+                                                    color: kBrandLight
+                                                        .withOpacity(0.5),
+                                                  ),
+                                                ),
+                                              );
+                                            }).toList(),
                                       ),
 
                                     const SizedBox(height: 24),
@@ -901,7 +936,9 @@ class ProfilePageState extends State<ProfilePage> {
 
                                     if (_scenarioResponses.isEmpty)
                                       Padding(
-                                        padding: const EdgeInsets.only(bottom: 8),
+                                        padding: const EdgeInsets.only(
+                                          bottom: 8,
+                                        ),
                                         child: Text(
                                           'Answer daily scenarios to build your profile!',
                                           style: TextStyle(
@@ -913,22 +950,33 @@ class ProfilePageState extends State<ProfilePage> {
                                     else
                                       ..._scenarioResponses.map((r) {
                                         final resp = r as Map<String, dynamic>;
-                                        final prompt = resp['prompt'] as String? ?? '';
-                                        final selectedText = resp['selected_text'] as String? ?? '';
+                                        final prompt =
+                                            resp['prompt'] as String? ?? '';
+                                        final selectedText =
+                                            resp['selected_text'] as String? ??
+                                            '';
                                         return Padding(
-                                          padding: const EdgeInsets.only(bottom: 8),
+                                          padding: const EdgeInsets.only(
+                                            bottom: 8,
+                                          ),
                                           child: Container(
                                             width: double.infinity,
                                             padding: const EdgeInsets.all(12),
                                             decoration: BoxDecoration(
-                                              color: kBrandLight.withValues(alpha: 0.12),
-                                              borderRadius: BorderRadius.circular(12),
+                                              color: kBrandLight.withValues(
+                                                alpha: 0.12,
+                                              ),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
                                               border: Border.all(
-                                                color: kBrandLight.withValues(alpha: 0.3),
+                                                color: kBrandLight.withValues(
+                                                  alpha: 0.3,
+                                                ),
                                               ),
                                             ),
                                             child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                               children: [
                                                 Text(
                                                   prompt,
@@ -938,21 +986,27 @@ class ProfilePageState extends State<ProfilePage> {
                                                     fontWeight: FontWeight.w500,
                                                   ),
                                                   maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
                                                 const SizedBox(height: 6),
                                                 Row(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
                                                   children: [
-                                                    const Icon(Icons.chat_bubble_outline,
-                                                        size: 16, color: kBrand),
+                                                    const Icon(
+                                                      Icons.chat_bubble_outline,
+                                                      size: 16,
+                                                      color: kBrand,
+                                                    ),
                                                     const SizedBox(width: 6),
                                                     Expanded(
                                                       child: Text(
                                                         selectedText,
                                                         style: const TextStyle(
                                                           fontSize: 14,
-                                                          fontWeight: FontWeight.w600,
+                                                          fontWeight:
+                                                              FontWeight.w600,
                                                           color: kBrand,
                                                         ),
                                                       ),
@@ -1049,5 +1103,4 @@ class ProfilePageState extends State<ProfilePage> {
       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
     ),
   );
-
 }
