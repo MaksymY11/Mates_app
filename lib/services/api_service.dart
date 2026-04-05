@@ -1,33 +1,43 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../login_page.dart';
 
 class ApiService {
-  static final String baseUrl = kIsWeb
-      ? 'https://mates-backend-dxma.onrender.com'
-      : Platform.isAndroid
+  static final String baseUrl =
+      kIsWeb
+          ? 'https://mates-backend-dxma.onrender.com'
+          : Platform.isAndroid
           ? 'http://10.0.2.2:8000'
           : 'http://localhost:8000';
 
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
 
-  // Gets the stored token from SharedPreferences
-  static Future<String?> _getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('auth_token');
+  static const _storage = FlutterSecureStorage();
+
+  // Sets the stored token from _storage
+  static Future<void> setToken(String token) async {
+    await _storage.write(key: 'auth_token', value: token);
+  }
+
+  // Gets the stored token from _storage
+  static Future<String?> getToken() async {
+    return await _storage.read(key: 'auth_token');
+  }
+
+  // Clears the stored token from _storage
+  static Future<void> clearToken() async {
+    await _storage.delete(key: 'auth_token');
   }
 
   // Clears the token and redirects to login
   static Future<void> handleUnauthorized() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
+    await _storage.delete(key: 'auth_token');
     navigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (route) => false,
@@ -36,7 +46,11 @@ class ApiService {
 
   // Authenticated GET request
   static Future<Map<String, dynamic>> get(String path) async {
-    final token = await _getToken();
+    final token = await getToken();
+    if (token == null) {
+      await handleUnauthorized();
+      throw Exception("Session expired. Please log in again.");
+    }
     final res = await http.get(
       Uri.parse('$baseUrl$path'),
       headers: {'Authorization': 'Bearer $token'},
@@ -63,7 +77,11 @@ class ApiService {
     final headers = {'Content-Type': 'application/json'};
 
     if (requiresAuth) {
-      final token = await _getToken();
+      final token = await getToken();
+      if (token == null) {
+        await handleUnauthorized();
+        throw Exception("Session expired. Please log in again.");
+      }
       headers['Authorization'] = 'Bearer $token';
     }
 
@@ -86,8 +104,15 @@ class ApiService {
   }
 
   // Authenticated DELETE request
-  static Future<Map<String, dynamic>> delete(String path, {Map<String, dynamic>? body}) async {
-    final token = await _getToken();
+  static Future<Map<String, dynamic>> delete(
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
+    final token = await getToken();
+    if (token == null) {
+      await handleUnauthorized();
+      throw Exception("Session expired. Please log in again.");
+    }
     final headers = <String, String>{'Authorization': 'Bearer $token'};
     if (body != null) headers['Content-Type'] = 'application/json';
     final res = await http.delete(
@@ -115,7 +140,11 @@ class ApiService {
     required String filename,
     MediaType? contentType,
   }) async {
-    final token = await _getToken();
+    final token = await getToken();
+    if (token == null) {
+      await handleUnauthorized();
+      throw Exception("Session expired. Please log in again.");
+    }
     final uri = Uri.parse('$baseUrl$path');
     final req = http.MultipartRequest('POST', uri);
     req.headers['Authorization'] = 'Bearer $token';

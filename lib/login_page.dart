@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'signup_page.dart';
 import 'services/auth_service.dart';
 import 'utils/validators.dart';
@@ -31,14 +30,10 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() => _loading = true);
     try {
-      final token = await AuthService.loginUser(
+      await AuthService.loginUser(
         _emailController.text,
         _passwordController.text,
       );
-
-      // Save token to secure storage for later use
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('auth_token', token);
 
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(

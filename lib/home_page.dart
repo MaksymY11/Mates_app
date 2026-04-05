@@ -164,7 +164,9 @@ class _HomeShellState extends State<HomeShell> {
             );
           }
       }
-    } catch (e) {}
+    } catch (e) {
+      print("Error: $e");
+    }
   }
 
   @override

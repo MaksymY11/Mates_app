@@ -1,4 +1,3 @@
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'services/auth_service.dart';
 import 'utils/validators.dart';
@@ -45,12 +44,10 @@ class _SignUpPageState extends State<SignUpPage> {
           _emailController.text,
           _passwordController.text,
         );
-        final token = await AuthService.loginUser(
+        await AuthService.loginUser(
           _emailController.text,
           _passwordController.text,
         );
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('auth_token', token);
         if (!mounted) return;
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const HomeShell()),

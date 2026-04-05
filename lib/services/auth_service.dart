@@ -9,7 +9,7 @@ class AuthService {
     );
   }
 
-  static Future<String> loginUser(String email, String password) async {
+  static Future<void> loginUser(String email, String password) async {
     final body = await ApiService.post(
       '/loginUser',
       body: {'email': email, 'password': password},
@@ -19,6 +19,6 @@ class AuthService {
     if (token == null) {
       throw Exception('Login failed: access_token missing');
     }
-    return token as String;
+    await ApiService.setToken(token);
   }
 }

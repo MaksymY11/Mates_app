@@ -448,26 +448,20 @@ class ProfilePageState extends State<ProfilePage> {
   Future<void> _logout() async {
     try {
       await _removeLocalAvatar();
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('auth_token');
+      final token = await ApiService.getToken();
 
       // Tell the server to invalidate the device and token
-      if (token != null) {
-        await PushNotificationService.instance.unregisterDevice();
-        await http.post(
-          Uri.parse('${ApiService.baseUrl}/logout'),
-          headers: {'Authorization': 'Bearer $token'},
-        );
-      }
-
-      await prefs.remove('auth_token');
+      await PushNotificationService.instance.unregisterDevice();
+      await http.post(
+        Uri.parse('${ApiService.baseUrl}/logout'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
     } catch (_) {
-      // Even if the server call fails, still log out locally
+      // Even if the server call fails, still remove avatar
       await _removeLocalAvatar();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('auth_token');
     }
 
+    await ApiService.clearToken();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),

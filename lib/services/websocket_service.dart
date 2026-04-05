@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'api_service.dart';
 
@@ -23,9 +22,11 @@ class WebSocketService {
   }
 
   Future<void> _doConnect() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('auth_token');
-    if (token == null) return;
+    final token = await ApiService.getToken();
+    if (token == null) {
+      ApiService.handleUnauthorized();
+      return;
+    }
 
     // Build WS URL from the REST base URL
     final base = ApiService.baseUrl
