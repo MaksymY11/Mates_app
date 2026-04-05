@@ -32,11 +32,12 @@ class WebSocketService {
     final base = ApiService.baseUrl
         .replaceFirst('http://', 'ws://')
         .replaceFirst('https://', 'wss://');
-    final uri = Uri.parse('$base/ws?token=$token');
+    final uri = Uri.parse('$base/ws');
 
     try {
       _channel = WebSocketChannel.connect(uri);
       await _channel!.ready;
+      _channel!.sink.add(jsonEncode({'type': 'auth', 'token': token}));
     } catch (_) {
       _scheduleReconnect();
       return;
