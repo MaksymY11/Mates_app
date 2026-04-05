@@ -71,7 +71,7 @@ class PushNotificationService {
     /// Remove the FCM token from the backend. Called on logout.
     try {
       final fcmToken = await FirebaseMessaging.instance.getToken();
-      await ApiService.post(
+      await ApiService.delete(
         '/devices/unregister',
         body: {'fcm_token': fcmToken},
       );

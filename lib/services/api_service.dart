@@ -86,11 +86,14 @@ class ApiService {
   }
 
   // Authenticated DELETE request
-  static Future<Map<String, dynamic>> delete(String path) async {
+  static Future<Map<String, dynamic>> delete(String path, {Map<String, dynamic>? body}) async {
     final token = await _getToken();
+    final headers = <String, String>{'Authorization': 'Bearer $token'};
+    if (body != null) headers['Content-Type'] = 'application/json';
     final res = await http.delete(
       Uri.parse('$baseUrl$path'),
-      headers: {'Authorization': 'Bearer $token'},
+      headers: headers,
+      body: body != null ? jsonEncode(body) : null,
     );
 
     if (res.statusCode == 401) {
