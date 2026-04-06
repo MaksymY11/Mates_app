@@ -1,4 +1,5 @@
 // lib/profile_page.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mates/login_page.dart';
 import 'dart:typed_data';
@@ -449,19 +450,27 @@ class ProfilePageState extends State<ProfilePage> {
     try {
       await _removeLocalAvatar();
       final token = await ApiService.getToken();
+      final refreshToken = await ApiService.getToken(key: 'refresh_token');
 
       // Tell the server to invalidate the device and token
-      await PushNotificationService.instance.unregisterDevice();
-      await http.post(
-        Uri.parse('${ApiService.baseUrl}/logout'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      if (token != null && refreshToken != null) {
+        await http.post(
+          Uri.parse('${ApiService.baseUrl}/logout'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({'refresh_token': refreshToken}),
+        );
+        await PushNotificationService.instance.unregisterDevice();
+      }
     } catch (_) {
       // Even if the server call fails, still remove avatar
       await _removeLocalAvatar();
     }
 
     await ApiService.clearToken();
+    await ApiService.clearToken(key: 'refresh_token');
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),

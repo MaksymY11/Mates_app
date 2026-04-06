@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -19,46 +20,68 @@ class ApiService {
       GlobalKey<NavigatorState>();
 
   static const _storage = FlutterSecureStorage();
+  static Completer<bool>? _refreshCompleter;
 
-  // Sets the stored token from _storage
-  static Future<void> setToken(String token) async {
-    await _storage.write(key: 'auth_token', value: token);
+  /// Stores the JWT access token in secure storage.
+  static Future<void> setToken(
+    String token, {
+    String key = 'auth_token',
+  }) async {
+    await _storage.write(key: key, value: token);
   }
 
-  // Gets the stored token from _storage
-  static Future<String?> getToken() async {
-    return await _storage.read(key: 'auth_token');
+  /// Retrieves the JWT access token from secure storage, or null if not set.
+  static Future<String?> getToken({String key = 'auth_token'}) async {
+    return await _storage.read(key: key);
   }
 
-  // Clears the stored token from _storage
-  static Future<void> clearToken() async {
-    await _storage.delete(key: 'auth_token');
+  /// Removes the JWT access token from secure storage.
+  static Future<void> clearToken({String key = 'auth_token'}) async {
+    await _storage.delete(key: key);
   }
 
-  // Clears the token and redirects to login
+  /// Clears the stored token and redirects to the login page.
+  /// Called when authentication fails and refresh is not possible.
   static Future<void> handleUnauthorized() async {
     await _storage.delete(key: 'auth_token');
+    await _storage.delete(key: 'refresh_token');
     navigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
       (route) => false,
     );
   }
 
-  // Authenticated GET request
+  /// Authenticated GET request. Times out after 30 seconds.
   static Future<Map<String, dynamic>> get(String path) async {
     final token = await getToken();
     if (token == null) {
       await handleUnauthorized();
       throw Exception("Session expired. Please log in again.");
     }
-    final res = await http.get(
-      Uri.parse('$baseUrl$path'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    final res = await http
+        .get(
+          Uri.parse('$baseUrl$path'),
+          headers: {'Authorization': 'Bearer $token'},
+        )
+        .timeout(const Duration(seconds: 30));
 
     if (res.statusCode == 401) {
-      await handleUnauthorized();
-      throw Exception('Session expired. Please log in again.');
+      final refreshed = await _tryRefresh();
+      if (!refreshed) {
+        await handleUnauthorized();
+        throw Exception("Session expired. Please log in again.");
+      }
+      // Retry the original request with new token
+      final newToken = await getToken();
+
+      final retry = await http
+          .get(
+            Uri.parse('$baseUrl$path'),
+            headers: {'Authorization': 'Bearer $newToken'},
+          )
+          .timeout(const Duration(seconds: 30));
+
+      return jsonDecode(retry.body) as Map<String, dynamic>;
     }
 
     if (res.statusCode != 200) {
@@ -68,7 +91,8 @@ class ApiService {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
-  // Authenticated POST request
+  /// Authenticated POST request. Times out after 30 seconds.
+  /// Set [requiresAuth] to false for unauthenticated endpoints (login, register).
   static Future<Map<String, dynamic>> post(
     String path, {
     Map<String, dynamic>? body,
@@ -85,15 +109,35 @@ class ApiService {
       headers['Authorization'] = 'Bearer $token';
     }
 
-    final res = await http.post(
-      Uri.parse('$baseUrl$path'),
-      headers: headers,
-      body: body != null ? jsonEncode(body) : null,
-    );
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl$path'),
+          headers: headers,
+          body: body != null ? jsonEncode(body) : null,
+        )
+        .timeout(const Duration(seconds: 30));
 
     if (res.statusCode == 401) {
-      await handleUnauthorized();
-      throw Exception('Session expired. Please log in again.');
+      final refreshed = await _tryRefresh();
+      if (!refreshed) {
+        await handleUnauthorized();
+        throw Exception("Session expired. Please log in again.");
+      }
+      // Retry the original request with new token
+      final newToken = await getToken();
+
+      final retry = await http
+          .post(
+            Uri.parse('$baseUrl$path'),
+            headers: {
+              'Authorization': 'Bearer $newToken',
+              'Content-Type': 'application/json',
+            },
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      return jsonDecode(retry.body) as Map<String, dynamic>;
     }
 
     if (res.statusCode != 200 && res.statusCode != 201) {
@@ -103,7 +147,7 @@ class ApiService {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
-  // Authenticated DELETE request
+  /// Authenticated DELETE request. Times out after 30 seconds.
   static Future<Map<String, dynamic>> delete(
     String path, {
     Map<String, dynamic>? body,
@@ -115,15 +159,35 @@ class ApiService {
     }
     final headers = <String, String>{'Authorization': 'Bearer $token'};
     if (body != null) headers['Content-Type'] = 'application/json';
-    final res = await http.delete(
-      Uri.parse('$baseUrl$path'),
-      headers: headers,
-      body: body != null ? jsonEncode(body) : null,
-    );
+    final res = await http
+        .delete(
+          Uri.parse('$baseUrl$path'),
+          headers: headers,
+          body: body != null ? jsonEncode(body) : null,
+        )
+        .timeout(const Duration(seconds: 30));
 
     if (res.statusCode == 401) {
-      await handleUnauthorized();
-      throw Exception('Session expired. Please log in again.');
+      final refreshed = await _tryRefresh();
+      if (!refreshed) {
+        await handleUnauthorized();
+        throw Exception("Session expired. Please log in again.");
+      }
+      // Retry the original request with new token
+      final newToken = await getToken();
+
+      final retry = await http
+          .delete(
+            Uri.parse('$baseUrl$path'),
+            headers: {
+              'Authorization': 'Bearer $newToken',
+              'Content-Type': 'application/json',
+            },
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      return jsonDecode(retry.body) as Map<String, dynamic>;
     }
 
     if (res.statusCode != 200) {
@@ -133,7 +197,7 @@ class ApiService {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
-  // Authenticated multipart file upload
+  /// Authenticated multipart file upload. Times out after 60 seconds.
   static Future<Map<String, dynamic>> uploadFile(
     String path, {
     required Uint8List bytes,
@@ -156,12 +220,32 @@ class ApiService {
         contentType: contentType ?? MediaType('image', 'jpeg'),
       ),
     );
-    final streamed = await req.send();
+    final streamed = await req.send().timeout(const Duration(seconds: 60));
     final res = await http.Response.fromStream(streamed);
 
     if (res.statusCode == 401) {
-      await handleUnauthorized();
-      throw Exception('Session expired. Please log in again.');
+      final refreshed = await _tryRefresh();
+      if (!refreshed) {
+        await handleUnauthorized();
+        throw Exception("Session expired. Please log in again.");
+      }
+      // Retry the original request with new token
+      final newToken = await getToken();
+
+      final req = http.MultipartRequest('POST', uri);
+      req.headers['Authorization'] = 'Bearer $newToken';
+      req.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: filename,
+          contentType: contentType ?? MediaType('image', 'jpeg'),
+        ),
+      );
+      final streamed = await req.send().timeout(const Duration(seconds: 60));
+      final retry = await http.Response.fromStream(streamed);
+
+      return jsonDecode(retry.body) as Map<String, dynamic>;
     }
 
     if (res.statusCode != 200) {
@@ -169,5 +253,38 @@ class ApiService {
     }
 
     return jsonDecode(res.body) as Map<String, dynamic>;
+  }
+
+  /// Attempts to refresh the access token using the stored refresh token.
+  /// Concurrent callers share the same refresh attempt via [Completer].
+  static Future<bool> _tryRefresh() async {
+    if (_refreshCompleter != null) {
+      return _refreshCompleter!.future;
+    }
+    _refreshCompleter = Completer<bool>();
+    bool success = false;
+    try {
+      final refreshToken = await getToken(key: 'refresh_token');
+      if (refreshToken != null) {
+        final res = await http
+            .post(
+              Uri.parse('$baseUrl/refreshToken'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'refresh_token': refreshToken}),
+            )
+            .timeout(const Duration(seconds: 10));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          await setToken(data['access_token']);
+          await setToken(data['refresh_token'], key: 'refresh_token');
+          success = true;
+        }
+      }
+    } catch (_) {
+    } finally {
+      _refreshCompleter!.complete(success);
+      _refreshCompleter = null;
+    }
+    return success;
   }
 }

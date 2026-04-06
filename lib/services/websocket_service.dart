@@ -15,12 +15,15 @@ class WebSocketService {
   int _reconnectDelay = 1;
   Timer? _reconnectTimer;
 
+  /// Opens the WebSocket connection and resets the reconnect backoff.
   Future<void> connect() async {
     _intentionalClose = false;
     _reconnectDelay = 1;
     await _doConnect();
   }
 
+  /// Establishes the WebSocket connection, sends auth frame, and listens for messages.
+  /// On failure or disconnect, schedules a reconnect (unless intentionally closed or auth rejected).
   Future<void> _doConnect() async {
     final token = await ApiService.getToken();
     if (token == null) {
@@ -70,10 +73,12 @@ class WebSocketService {
     );
   }
 
+  /// Sends a JSON-encoded message over the WebSocket.
   void send(Map<String, dynamic> data) {
     _channel?.sink.add(jsonEncode(data));
   }
 
+  /// Closes the connection and cancels any pending reconnect.
   void disconnect() {
     _intentionalClose = true;
     _reconnectTimer?.cancel();
@@ -82,15 +87,19 @@ class WebSocketService {
     _channel = null;
   }
 
+  /// Schedules a reconnection attempt with exponential backoff (1s → 2s → 4s → ... → 30s max)
+  /// Skips if a reconnect is already pending. Backoff resets on successful connect.
   void _scheduleReconnect() {
-    _reconnectTimer?.cancel();
+    if (_reconnectTimer?.isActive ?? false) {
+      return; // If a reconnect is already scheduled, do nothing
+    }
     _reconnectTimer = Timer(Duration(seconds: _reconnectDelay), () {
       _doConnect();
+      _reconnectDelay = (_reconnectDelay * 2).clamp(1, 30);
     });
-    // Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 30s
-    _reconnectDelay = (_reconnectDelay * 2).clamp(1, 30);
   }
 
+  /// Disconnects and closes the message stream permanently.
   void dispose() {
     disconnect();
     _controller.close();
