@@ -80,19 +80,37 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
     super.dispose();
   }
 
+  /// Loads apartment, catalog, and presets in parallel.
+  /// Catalog and apartment are required; presets degrade gracefully to empty.
   Future<void> _init() async {
     try {
+      Future<T?> tryFetch<T>(Future<T> future) async {
+        try {
+          return await future;
+        } catch (_) {
+          return null;
+        }
+      }
+
       final results = await Future.wait([
-        ApartmentService.createApartment(),
-        ApartmentService.getCatalog(),
-        ApartmentService.getPresets(),
+        tryFetch(ApartmentService.createApartment()),
+        tryFetch(ApartmentService.getCatalog()),
+        tryFetch(ApartmentService.getPresets()),
       ]);
+      if (!mounted) return;
 
       final apartment = results[0];
       final catalog = results[1];
       final presets = results[2];
 
       final lookup = <int, Map<String, dynamic>>{};
+      if (apartment == null || catalog == null) {
+        setState(() {
+          _error = 'Failed to load apartment data. Please try again.';
+          _initialLoading = false;
+        });
+        return;
+      }
       for (final zoneEntry in catalog.entries) {
         final categories = zoneEntry.value as Map<String, dynamic>;
         for (final catEntry in categories.entries) {
@@ -103,24 +121,21 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
         }
       }
 
-      if (mounted) {
-        setState(() {
-          _items = apartment['items'] as List<dynamic>? ?? [];
-          _catalog = catalog;
-          _presets = presets;
-          _furnitureLookup = lookup;
-          _initialLoading = false;
-        });
-        _fetchVibe();
-        _fetchDailyScenario();
-      }
+      setState(() {
+        _items = apartment['items'] as List<dynamic>? ?? [];
+        _catalog = catalog;
+        _presets = presets ?? {};
+        _furnitureLookup = lookup;
+        _initialLoading = false;
+      });
+      _fetchVibe();
+      _fetchDailyScenario();
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = '$e';
-          _initialLoading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _error = '$e';
+        _initialLoading = false;
+      });
     }
   }
 
@@ -165,28 +180,29 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _ScenarioBottomSheet(
-        prompt: prompt,
-        options: options,
-        requiresSubstitution: _scenarioRequiresSubstitution,
-        currentResponses: _scenarioCurrentResponses,
-        onAnswer: (String selectedOption, int? replaceScenarioId) async {
-          await ScenarioService.answer(
-            scenarioId: scenarioId,
-            selectedOption: selectedOption,
-            replaceScenarioId: replaceScenarioId,
-          );
-          if (mounted) {
-            _fetchDailyScenario();
-          }
-        },
-        onSkip: () async {
-          await ScenarioService.skip();
-          if (mounted) {
-            _fetchDailyScenario();
-          }
-        },
-      ),
+      builder:
+          (ctx) => _ScenarioBottomSheet(
+            prompt: prompt,
+            options: options,
+            requiresSubstitution: _scenarioRequiresSubstitution,
+            currentResponses: _scenarioCurrentResponses,
+            onAnswer: (String selectedOption, int? replaceScenarioId) async {
+              await ScenarioService.answer(
+                scenarioId: scenarioId,
+                selectedOption: selectedOption,
+                replaceScenarioId: replaceScenarioId,
+              );
+              if (mounted) {
+                _fetchDailyScenario();
+              }
+            },
+            onSkip: () async {
+              await ScenarioService.skip();
+              if (mounted) {
+                _fetchDailyScenario();
+              }
+            },
+          ),
     );
   }
 
@@ -239,8 +255,11 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Failed to update apartment. Please try again.')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to update apartment. Please try again.'),
+          ),
+        );
       }
     }
   }
@@ -274,7 +293,11 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
     final zonePresets = _presets[zone] as List<dynamic>?;
     if (zonePresets == null || zonePresets.isEmpty) return;
 
-    final result = await showPresetPicker(context, zone: zone, presets: zonePresets);
+    final result = await showPresetPicker(
+      context,
+      zone: zone,
+      presets: zonePresets,
+    );
     if (result != null && mounted) _updateApartment(result);
   }
 
@@ -333,10 +356,7 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
               Positioned(
                 top: 12,
                 left: 12,
-                child: _circleButton(
-                  icon: Icons.arrow_back,
-                  onTap: _zoomOut,
-                ),
+                child: _circleButton(icon: Icons.arrow_back, onTap: _zoomOut),
               ),
             // Zone label when zoomed
             if (_activeZone != null)
@@ -350,7 +370,9 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
                     duration: Duration.zero,
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white.withValues(alpha: 0.9),
                         borderRadius: BorderRadius.circular(20),
@@ -370,8 +392,7 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
                 ),
               ),
             // Vibe summary card (always visible when labels exist)
-            if (_vibeLabels.isNotEmpty)
-              _buildVibeCard(),
+            if (_vibeLabels.isNotEmpty) _buildVibeCard(),
             // Daily scenario banner
             if (_dailyScenario != null &&
                 !_scenarioCompletedToday &&
@@ -434,11 +455,12 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
     return Center(
       child: Transform(
         alignment: Alignment.center,
-        transform: Matrix4.identity()
-          ..setEntry(3, 2, 0.0012)
-          ..rotateX(tiltAngle)
-          ..scaleByDouble(scale, scale, scale, 1.0)
-          ..translateByDouble(offsetX, offsetY, 0.0, 1.0),
+        transform:
+            Matrix4.identity()
+              ..setEntry(3, 2, 0.0012)
+              ..rotateX(tiltAngle)
+              ..scaleByDouble(scale, scale, scale, 1.0)
+              ..translateByDouble(offsetX, offsetY, 0.0, 1.0),
         child: SizedBox(
           width: gridSize,
           height: gridSize,
@@ -534,42 +556,44 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
                 const SizedBox(height: 4),
                 // Furniture icons
                 Expanded(
-                  child: zoneItems.isEmpty
-                      ? Center(
-                          child: Icon(
-                            _zoneIcons[index],
-                            size: 28,
-                            color: Colors.grey[300],
+                  child:
+                      zoneItems.isEmpty
+                          ? Center(
+                            child: Icon(
+                              _zoneIcons[index],
+                              size: 28,
+                              color: Colors.grey[300],
+                            ),
+                          )
+                          : Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children:
+                                zoneItems.map((item) {
+                                  final f = item as Map<String, dynamic>;
+                                  final fId = f['furniture_id'] as int;
+                                  final furniture = _furnitureLookup[fId];
+                                  final iconName =
+                                      furniture?['icon_name'] as String? ?? '';
+                                  return Tooltip(
+                                    message:
+                                        furniture?['name'] as String? ?? '',
+                                    child: Container(
+                                      width: 30,
+                                      height: 30,
+                                      decoration: BoxDecoration(
+                                        color: brand.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Icon(
+                                        iconFor(iconName),
+                                        size: 16,
+                                        color: brand,
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
                           ),
-                        )
-                      : Wrap(
-                          spacing: 4,
-                          runSpacing: 4,
-                          children: zoneItems.map((item) {
-                            final f = item as Map<String, dynamic>;
-                            final fId = f['furniture_id'] as int;
-                            final furniture = _furnitureLookup[fId];
-                            final iconName =
-                                furniture?['icon_name'] as String? ?? '';
-                            return Tooltip(
-                              message:
-                                  furniture?['name'] as String? ?? '',
-                              child: Container(
-                                width: 30,
-                                height: 30,
-                                decoration: BoxDecoration(
-                                  color: brand.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Icon(
-                                  iconFor(iconName),
-                                  size: 16,
-                                  color: brand,
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
                 ),
               ],
             ),
@@ -669,9 +693,7 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
               decoration: BoxDecoration(
                 color: brandLight.withValues(alpha: 0.25),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: brandLight.withValues(alpha: 0.5),
-                ),
+                border: Border.all(color: brandLight.withValues(alpha: 0.5)),
               ),
               child: Text(
                 _vibeLabels[index],
@@ -720,7 +742,11 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
               color: Colors.white,
               borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               boxShadow: [
-                BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2)),
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 10,
+                  offset: Offset(0, -2),
+                ),
               ],
             ),
             child: Column(
@@ -765,7 +791,9 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
                           label: const Text('Use preset'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: brand,
-                            side: BorderSide(color: Theme.of(context).colorScheme.secondary),
+                            side: BorderSide(
+                              color: Theme.of(context).colorScheme.secondary,
+                            ),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
@@ -795,13 +823,11 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
                       itemCount: zoneItems.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 6),
                       itemBuilder: (context, index) {
-                        final i =
-                            zoneItems[index] as Map<String, dynamic>;
+                        final i = zoneItems[index] as Map<String, dynamic>;
                         final itemId = i['id'] as int;
                         final furnitureId = i['furniture_id'] as int;
                         final furniture = _furnitureLookup[furnitureId];
-                        final name =
-                            furniture?['name'] as String? ?? 'Unknown';
+                        final name = furniture?['name'] as String? ?? 'Unknown';
                         final iconName =
                             furniture?['icon_name'] as String? ?? '';
 
@@ -810,11 +836,12 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
                           borderRadius: BorderRadius.circular(10),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
                             child: Row(
                               children: [
-                                Icon(iconFor(iconName),
-                                    color: brand, size: 22),
+                                Icon(iconFor(iconName), color: brand, size: 22),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
@@ -828,8 +855,11 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
                                 InkWell(
                                   borderRadius: BorderRadius.circular(20),
                                   onTap: () => _removeItem(itemId),
-                                  child: Icon(Icons.close,
-                                      size: 18, color: Colors.grey[500]),
+                                  child: Icon(
+                                    Icons.close,
+                                    size: 18,
+                                    color: Colors.grey[500],
+                                  ),
                                 ),
                               ],
                             ),
@@ -859,7 +889,11 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           boxShadow: const [
-            BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
           ],
         ),
         child: Row(
@@ -896,7 +930,11 @@ class _ApartmentBuilderPageState extends State<ApartmentBuilderPage>
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: brandLight.withValues(alpha: 0.5)),
             boxShadow: const [
-              BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 6,
+                offset: Offset(0, 2),
+              ),
             ],
           ),
           child: Row(
@@ -943,7 +981,8 @@ class _ScenarioBottomSheet extends StatefulWidget {
   final List<dynamic> options;
   final bool requiresSubstitution;
   final List<dynamic> currentResponses;
-  final Future<void> Function(String selectedOption, int? replaceScenarioId) onAnswer;
+  final Future<void> Function(String selectedOption, int? replaceScenarioId)
+  onAnswer;
   final Future<void> Function() onSkip;
 
   const _ScenarioBottomSheet({
@@ -1028,23 +1067,27 @@ class _ScenarioBottomSheetState extends State<_ScenarioBottomSheet> {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: GestureDetector(
-                    onTap: _submitting ? null : () {
-                      setState(() => _selectedOption = id);
-                    },
+                    onTap:
+                        _submitting
+                            ? null
+                            : () {
+                              setState(() => _selectedOption = id);
+                            },
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
-                        color: isSelected
-                            ? brandLight.withValues(alpha: 0.2)
-                            : Colors.grey[50],
+                        color:
+                            isSelected
+                                ? brandLight.withValues(alpha: 0.2)
+                                : Colors.grey[50],
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: isSelected
-                              ? brand
-                              : Colors.grey[300]!,
+                          color: isSelected ? brand : Colors.grey[300]!,
                           width: isSelected ? 2 : 1,
                         ),
                       ),
@@ -1065,28 +1108,29 @@ class _ScenarioBottomSheetState extends State<_ScenarioBottomSheet> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _selectedOption == null || _submitting
-                      ? null
-                      : () async {
-                          if (widget.requiresSubstitution) {
-                            setState(() => _showSubstitution = true);
-                          } else {
-                            setState(() => _submitting = true);
-                            final nav = Navigator.of(context);
-                            final messenger = ScaffoldMessenger.of(context);
-                            try {
-                              await widget.onAnswer(_selectedOption!, null);
-                              if (mounted) nav.pop();
-                            } catch (e) {
-                              if (mounted) {
-                                messenger.showSnackBar(
-                                  SnackBar(content: Text('Failed: $e')),
-                                );
-                                setState(() => _submitting = false);
+                  onPressed:
+                      _selectedOption == null || _submitting
+                          ? null
+                          : () async {
+                            if (widget.requiresSubstitution) {
+                              setState(() => _showSubstitution = true);
+                            } else {
+                              setState(() => _submitting = true);
+                              final nav = Navigator.of(context);
+                              final messenger = ScaffoldMessenger.of(context);
+                              try {
+                                await widget.onAnswer(_selectedOption!, null);
+                                if (mounted) nav.pop();
+                              } catch (e) {
+                                if (mounted) {
+                                  messenger.showSnackBar(
+                                    SnackBar(content: Text('Failed: $e')),
+                                  );
+                                  setState(() => _submitting = false);
+                                }
                               }
                             }
-                          }
-                        },
+                          },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: brand,
                     foregroundColor: Colors.white,
@@ -1095,17 +1139,20 @@ class _ScenarioBottomSheetState extends State<_ScenarioBottomSheet> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: _submitting
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+                  child:
+                      _submitting
+                          ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                          : const Text(
+                            'Confirm Answer',
+                            style: TextStyle(fontSize: 15),
                           ),
-                        )
-                      : const Text('Confirm Answer',
-                          style: TextStyle(fontSize: 15)),
                 ),
               ),
             ] else ...[
@@ -1141,22 +1188,28 @@ class _ScenarioBottomSheetState extends State<_ScenarioBottomSheet> {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: GestureDetector(
-                    onTap: _submitting ? null : () async {
-                      setState(() => _submitting = true);
-                      final nav = Navigator.of(context);
-                      final messenger = ScaffoldMessenger.of(context);
-                      try {
-                        await widget.onAnswer(_selectedOption!, scenarioId);
-                        if (mounted) nav.pop();
-                      } catch (e) {
-                        if (mounted) {
-                          messenger.showSnackBar(
-                            SnackBar(content: Text('Failed: $e')),
-                          );
-                          setState(() => _submitting = false);
-                        }
-                      }
-                    },
+                    onTap:
+                        _submitting
+                            ? null
+                            : () async {
+                              setState(() => _submitting = true);
+                              final nav = Navigator.of(context);
+                              final messenger = ScaffoldMessenger.of(context);
+                              try {
+                                await widget.onAnswer(
+                                  _selectedOption!,
+                                  scenarioId,
+                                );
+                                if (mounted) nav.pop();
+                              } catch (e) {
+                                if (mounted) {
+                                  messenger.showSnackBar(
+                                    SnackBar(content: Text('Failed: $e')),
+                                  );
+                                  setState(() => _submitting = false);
+                                }
+                              }
+                            },
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
@@ -1180,8 +1233,11 @@ class _ScenarioBottomSheetState extends State<_ScenarioBottomSheet> {
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              Icon(Icons.chat_bubble_outline,
-                                  size: 14, color: brand),
+                              Icon(
+                                Icons.chat_bubble_outline,
+                                size: 14,
+                                color: brand,
+                              ),
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(
@@ -1193,8 +1249,11 @@ class _ScenarioBottomSheetState extends State<_ScenarioBottomSheet> {
                                   ),
                                 ),
                               ),
-                              Icon(Icons.swap_horiz,
-                                  size: 18, color: Colors.grey[400]),
+                              Icon(
+                                Icons.swap_horiz,
+                                size: 18,
+                                color: Colors.grey[400],
+                              ),
                             ],
                           ),
                         ],
@@ -1207,22 +1266,25 @@ class _ScenarioBottomSheetState extends State<_ScenarioBottomSheet> {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
-                  onPressed: _submitting ? null : () async {
-                    setState(() => _submitting = true);
-                    final nav = Navigator.of(context);
-                    final messenger = ScaffoldMessenger.of(context);
-                    try {
-                      await widget.onSkip();
-                      if (mounted) nav.pop();
-                    } catch (e) {
-                      if (mounted) {
-                        messenger.showSnackBar(
-                          SnackBar(content: Text('Failed: $e')),
-                        );
-                        setState(() => _submitting = false);
-                      }
-                    }
-                  },
+                  onPressed:
+                      _submitting
+                          ? null
+                          : () async {
+                            setState(() => _submitting = true);
+                            final nav = Navigator.of(context);
+                            final messenger = ScaffoldMessenger.of(context);
+                            try {
+                              await widget.onSkip();
+                              if (mounted) nav.pop();
+                            } catch (e) {
+                              if (mounted) {
+                                messenger.showSnackBar(
+                                  SnackBar(content: Text('Failed: $e')),
+                                );
+                                setState(() => _submitting = false);
+                              }
+                            }
+                          },
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.grey[700],
                     side: BorderSide(color: Colors.grey[400]!),
@@ -1231,8 +1293,10 @@ class _ScenarioBottomSheetState extends State<_ScenarioBottomSheet> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text('Keep my current answers',
-                      style: TextStyle(fontSize: 15)),
+                  child: const Text(
+                    'Keep my current answers',
+                    style: TextStyle(fontSize: 15),
+                  ),
                 ),
               ),
             ],

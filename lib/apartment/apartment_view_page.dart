@@ -31,11 +31,7 @@ class ApartmentViewPage extends StatefulWidget {
   final int userId;
   final String? userName;
 
-  const ApartmentViewPage({
-    super.key,
-    required this.userId,
-    this.userName,
-  });
+  const ApartmentViewPage({super.key, required this.userId, this.userName});
 
   @override
   State<ApartmentViewPage> createState() => _ApartmentViewPageState();
@@ -90,22 +86,45 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
     super.dispose();
   }
 
+  /// Loads apartment, catalog, and sent interests in parallel.
+  /// Catalog and apartment are required; sent interests default to empty.
   Future<void> _init() async {
     try {
+      Future<T?> tryFetch<T>(Future<T> future) async {
+        try {
+          return await future;
+        } catch (_) {
+          return null;
+        }
+      }
+
       final results = await Future.wait([
-        ApartmentService.getUserApartment(widget.userId),
-        ApartmentService.getCatalog(),
-        QuickPickService.getSentInterests(),
+        tryFetch(ApartmentService.getUserApartment(widget.userId)),
+        tryFetch(ApartmentService.getCatalog()),
+        tryFetch(QuickPickService.getSentInterests()),
       ]);
+      if (!mounted) return;
 
       final apartment = results[0];
       final catalog = results[1];
       final sentData = results[2];
-      final sentIds = Set<int>.from(
-        (sentData['sent_to'] as List<dynamic>? ?? []).map((e) => e as int),
-      );
+      final sentIds =
+          sentData != null
+              ? Set<int>.from(
+                (sentData['sent_to'] as List<dynamic>? ?? []).map(
+                  (e) => e as int,
+                ),
+              )
+              : <int>{};
 
       final lookup = <int, Map<String, dynamic>>{};
+      if (apartment == null || catalog == null) {
+        setState(() {
+          _error = 'Failed to load apartment data. Please try again.';
+          _loading = false;
+        });
+        return;
+      }
       for (final zoneEntry in catalog.entries) {
         final categories = zoneEntry.value as Map<String, dynamic>;
         for (final catEntry in categories.entries) {
@@ -116,23 +135,20 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
         }
       }
 
-      if (mounted) {
-        setState(() {
-          _items = apartment['items'] as List<dynamic>? ?? [];
-          _furnitureLookup = lookup;
-          _waved = sentIds.contains(widget.userId);
-          _loading = false;
-        });
-        _fetchComparison();
-        _checkHouseholdInviteEligibility();
-      }
+      setState(() {
+        _items = apartment['items'] as List<dynamic>? ?? [];
+        _furnitureLookup = lookup;
+        _waved = sentIds.contains(widget.userId);
+        _loading = false;
+      });
+      _fetchComparison();
+      _checkHouseholdInviteEligibility();
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = '$e';
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _error = '$e';
+        _loading = false;
+      });
     }
   }
 
@@ -142,12 +158,12 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
       if (mounted) {
         setState(() {
           _similarities = comparison['similarities'] as List<dynamic>? ?? [];
-          _conversationStarters =
-              List<String>.from(comparison['conversation_starters'] ?? []);
+          _conversationStarters = List<String>.from(
+            comparison['conversation_starters'] ?? [],
+          );
           final theirVibe =
               comparison['their_vibe'] as Map<String, dynamic>? ?? {};
-          _theirVibeLabels =
-              List<String>.from(theirVibe['vibe_labels'] ?? []);
+          _theirVibeLabels = List<String>.from(theirVibe['vibe_labels'] ?? []);
           _vibeLoaded = true;
         });
       }
@@ -184,13 +200,17 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
       await HouseholdService.inviteUser(widget.userId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Invite sent to ${widget.userName ?? 'them'}!')),
+          SnackBar(
+            content: Text('Invite sent to ${widget.userName ?? 'them'}!'),
+          ),
         );
         setState(() => _canInviteToHousehold = false);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
       }
     }
   }
@@ -203,9 +223,14 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
       try {
         await QuickPickService.withdrawInterest(widget.userId);
         if (mounted) {
-          setState(() { _waved = false; _waving = false; });
+          setState(() {
+            _waved = false;
+            _waving = false;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Withdrew wave from ${widget.userName ?? 'user'}')),
+            SnackBar(
+              content: Text('Withdrew wave from ${widget.userName ?? 'user'}'),
+            ),
           );
         }
       } catch (e) {
@@ -218,7 +243,10 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
     try {
       final result = await QuickPickService.expressInterest(widget.userId);
       if (!mounted) return;
-      setState(() { _waved = true; _waving = false; });
+      setState(() {
+        _waved = true;
+        _waving = false;
+      });
       if (result['mutual'] == true) {
         _showMutualDialog();
       } else {
@@ -241,7 +269,9 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
       builder: (ctx) {
         final brand = Theme.of(ctx).colorScheme.primary;
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: Row(
             children: [
               Icon(Icons.celebration, color: brand),
@@ -262,14 +292,18 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
                 Navigator.of(ctx).pop();
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => QuickPickPage(
-                      otherUserId: widget.userId,
-                      otherUserName: widget.userName,
-                    ),
+                    builder:
+                        (_) => QuickPickPage(
+                          otherUserId: widget.userId,
+                          otherUserName: widget.userName,
+                        ),
                   ),
                 );
               },
-              style: ElevatedButton.styleFrom(backgroundColor: brand, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: brand,
+                foregroundColor: Colors.white,
+              ),
               child: const Text('Quick Picks'),
             ),
           ],
@@ -297,9 +331,10 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.userName != null
-        ? "${widget.userName}'s Apartment"
-        : 'Apartment';
+    final title =
+        widget.userName != null
+            ? "${widget.userName}'s Apartment"
+            : 'Apartment';
 
     return Scaffold(
       appBar: AppBar(
@@ -322,43 +357,48 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
+      body:
+          _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
               ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                        const SizedBox(height: 12),
-                        Text(_error!, textAlign: TextAlign.center),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () {
-                            setState(() {
-                              _loading = true;
-                              _error = null;
-                            });
-                            _init();
-                          },
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: Colors.red,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(_error!, textAlign: TextAlign.center),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _loading = true;
+                            _error = null;
+                          });
+                          _init();
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
                   ),
-                )
-              : Stack(
-                  children: [
-                    _buildApartmentView(),
-                    if (_activeZone == null && _vibeLoaded)
-                      _buildVibeComparison(),
-                    if (_activeZone != null) _buildBackButton(),
-                    if (_activeZone != null) _buildZoneLabel(),
-                    if (_activeZone != null) _buildItemsPanel(),
-                  ],
                 ),
+              )
+              : Stack(
+                children: [
+                  _buildApartmentView(),
+                  if (_activeZone == null && _vibeLoaded)
+                    _buildVibeComparison(),
+                  if (_activeZone != null) _buildBackButton(),
+                  if (_activeZone != null) _buildZoneLabel(),
+                  if (_activeZone != null) _buildItemsPanel(),
+                ],
+              ),
     );
   }
 
@@ -402,8 +442,7 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
             ),
             child: Text(
               _zoneLabels[_activeZone!],
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
           ),
         ),
@@ -432,11 +471,12 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
     return Center(
       child: Transform(
         alignment: Alignment.center,
-        transform: Matrix4.identity()
-          ..setEntry(3, 2, 0.0012)
-          ..rotateX(tiltAngle)
-          ..scaleByDouble(scale, scale, scale, 1.0)
-          ..translateByDouble(offsetX, offsetY, 0.0, 1.0),
+        transform:
+            Matrix4.identity()
+              ..setEntry(3, 2, 0.0012)
+              ..rotateX(tiltAngle)
+              ..scaleByDouble(scale, scale, scale, 1.0)
+              ..translateByDouble(offsetX, offsetY, 0.0, 1.0),
         child: SizedBox(
           width: gridSize,
           height: gridSize,
@@ -524,36 +564,44 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
                 ),
                 const SizedBox(height: 4),
                 Expanded(
-                  child: zoneItems.isEmpty
-                      ? Center(
-                          child: Icon(_zoneIcons[index],
-                              size: 28, color: Colors.grey[300]),
-                        )
-                      : Wrap(
-                          spacing: 4,
-                          runSpacing: 4,
-                          children: zoneItems.map((item) {
-                            final f = item as Map<String, dynamic>;
-                            final fId = f['furniture_id'] as int;
-                            final furniture = _furnitureLookup[fId];
-                            final iconName =
-                                furniture?['icon_name'] as String? ?? '';
-                            return Tooltip(
-                              message:
-                                  furniture?['name'] as String? ?? '',
-                              child: Container(
-                                width: 30,
-                                height: 30,
-                                decoration: BoxDecoration(
-                                  color: brand.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Icon(iconFor(iconName),
-                                    size: 16, color: brand),
-                              ),
-                            );
-                          }).toList(),
-                        ),
+                  child:
+                      zoneItems.isEmpty
+                          ? Center(
+                            child: Icon(
+                              _zoneIcons[index],
+                              size: 28,
+                              color: Colors.grey[300],
+                            ),
+                          )
+                          : Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children:
+                                zoneItems.map((item) {
+                                  final f = item as Map<String, dynamic>;
+                                  final fId = f['furniture_id'] as int;
+                                  final furniture = _furnitureLookup[fId];
+                                  final iconName =
+                                      furniture?['icon_name'] as String? ?? '';
+                                  return Tooltip(
+                                    message:
+                                        furniture?['name'] as String? ?? '',
+                                    child: Container(
+                                      width: 30,
+                                      height: 30,
+                                      decoration: BoxDecoration(
+                                        color: brand.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Icon(
+                                        iconFor(iconName),
+                                        size: 16,
+                                        color: brand,
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                          ),
                 ),
               ],
             ),
@@ -566,7 +614,8 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
   Widget _buildVibeComparison() {
     final brand = Theme.of(context).colorScheme.primary;
     final brandLight = Theme.of(context).colorScheme.secondary;
-    final hasContent = _theirVibeLabels.isNotEmpty ||
+    final hasContent =
+        _theirVibeLabels.isNotEmpty ||
         _similarities.isNotEmpty ||
         _conversationStarters.isNotEmpty;
     if (!hasContent) return const SizedBox.shrink();
@@ -585,7 +634,10 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
           borderRadius: BorderRadius.circular(16),
           boxShadow: const [
             BoxShadow(
-                color: Colors.black12, blurRadius: 8, offset: Offset(0, 2)),
+              color: Colors.black12,
+              blurRadius: 8,
+              offset: Offset(0, 2),
+            ),
           ],
         ),
         child: SingleChildScrollView(
@@ -612,27 +664,30 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
                 Wrap(
                   spacing: 8,
                   runSpacing: 6,
-                  children: _theirVibeLabels.map((label) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: brandLight.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: brandLight.withValues(alpha: 0.5),
-                        ),
-                      ),
-                      child: Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: brand,
-                        ),
-                      ),
-                    );
-                  }).toList(),
+                  children:
+                      _theirVibeLabels.map((label) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: brandLight.withValues(alpha: 0.25),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: brandLight.withValues(alpha: 0.5),
+                            ),
+                          ),
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: brand,
+                            ),
+                          ),
+                        );
+                      }).toList(),
                 ),
               ],
               // Similarities
@@ -658,8 +713,11 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Row(
                       children: [
-                        const Icon(Icons.check_circle,
-                            size: 16, color: Colors.green),
+                        const Icon(
+                          Icons.check_circle,
+                          size: 16,
+                          color: Colors.green,
+                        ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
@@ -677,8 +735,11 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    const Icon(Icons.chat_bubble_outline,
-                        size: 18, color: Colors.orange),
+                    const Icon(
+                      Icons.chat_bubble_outline,
+                      size: 18,
+                      color: Colors.orange,
+                    ),
                     const SizedBox(width: 6),
                     const Text(
                       'Worth discussing',
@@ -696,8 +757,11 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.lightbulb_outline,
-                            size: 16, color: Colors.orange),
+                        const Icon(
+                          Icons.lightbulb_outline,
+                          size: 16,
+                          color: Colors.orange,
+                        ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
@@ -715,9 +779,11 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    Icon(Icons.quiz_outlined,
-                        size: 18,
-                        color: Theme.of(context).colorScheme.primary),
+                    Icon(
+                      Icons.quiz_outlined,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                     const SizedBox(width: 6),
                     const Text(
                       'Scenario Answers',
@@ -736,8 +802,7 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
                   final theirAnswer = comp['their_answer'] as String? ?? '';
                   final agreed = comp['agreed'] == true;
                   final starter = comp['conversation_starter'] as String?;
-                  final accentColor =
-                      agreed ? Colors.green : Colors.orange;
+                  final accentColor = agreed ? Colors.green : Colors.orange;
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 10),
@@ -767,13 +832,18 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
                           Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('You: ',
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600)),
+                              const Text(
+                                'You: ',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                               Expanded(
-                                child: Text(myAnswer,
-                                    style: const TextStyle(fontSize: 12)),
+                                child: Text(
+                                  myAnswer,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
                               ),
                             ],
                           ),
@@ -784,12 +854,15 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
                               Text(
                                 '${widget.userName ?? "Them"}: ',
                                 style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                               Expanded(
-                                child: Text(theirAnswer,
-                                    style: const TextStyle(fontSize: 12)),
+                                child: Text(
+                                  theirAnswer,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
                               ),
                             ],
                           ),
@@ -797,8 +870,11 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
                             const SizedBox(height: 6),
                             Row(
                               children: [
-                                Icon(Icons.check_circle,
-                                    size: 14, color: accentColor),
+                                Icon(
+                                  Icons.check_circle,
+                                  size: 14,
+                                  color: accentColor,
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   'You agree on this one!',
@@ -816,8 +892,11 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(Icons.lightbulb_outline,
-                                    size: 14, color: accentColor),
+                                Icon(
+                                  Icons.lightbulb_outline,
+                                  size: 14,
+                                  color: accentColor,
+                                ),
                                 const SizedBox(width: 4),
                                 Expanded(
                                   child: Text(
@@ -867,9 +946,10 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 10,
-                  offset: Offset(0, -2)),
+                color: Colors.black12,
+                blurRadius: 10,
+                offset: Offset(0, -2),
+              ),
             ],
           ),
           child: Column(
@@ -913,29 +993,26 @@ class _ApartmentViewPageState extends State<ApartmentViewPage>
                       final i = zoneItems[index] as Map<String, dynamic>;
                       final furnitureId = i['furniture_id'] as int;
                       final furniture = _furnitureLookup[furnitureId];
-                      final name =
-                          furniture?['name'] as String? ?? 'Unknown';
-                      final desc =
-                          furniture?['description'] as String? ?? '';
-                      final iconName =
-                          furniture?['icon_name'] as String? ?? '';
+                      final name = furniture?['name'] as String? ?? 'Unknown';
+                      final desc = furniture?['description'] as String? ?? '';
+                      final iconName = furniture?['icon_name'] as String? ?? '';
 
                       return Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 10),
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
                           color: brand.withValues(alpha: 0.06),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
                           children: [
-                            Icon(iconFor(iconName),
-                                color: brand, size: 22),
+                            Icon(iconFor(iconName), color: brand, size: 22),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     name,
