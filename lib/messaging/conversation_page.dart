@@ -37,6 +37,7 @@ class _ConversationPageState extends State<ConversationPage> {
   Timer? _typingDisplayTimer;
   StreamSubscription? _wsSub;
   int? _currentUserId;
+  DateTime? _lastLoadTime;
 
   @override
   void initState() {
@@ -83,7 +84,14 @@ class _ConversationPageState extends State<ConversationPage> {
     }
   }
 
+  /// Fetches older messages for cursor-based pagination.
+  /// Debounced to 1 second to prevent duplicate loads from rapid scrolling.
   Future<void> _loadOlderMessages() async {
+    if (_lastLoadTime != null &&
+        DateTime.now().difference(_lastLoadTime!) < Duration(seconds: 1)) {
+      return;
+    }
+    _lastLoadTime = DateTime.now();
     if (_loadingMore || !_hasMore || _messages.isEmpty) return;
     setState(() => _loadingMore = true);
 
@@ -94,7 +102,8 @@ class _ConversationPageState extends State<ConversationPage> {
         before: oldestId,
       );
       if (!mounted) return;
-      final older = (data['messages'] as List<dynamic>).cast<Map<String, dynamic>>();
+      final older =
+          (data['messages'] as List<dynamic>).cast<Map<String, dynamic>>();
       setState(() {
         _messages.insertAll(0, older);
         _loadingMore = false;
@@ -194,33 +203,39 @@ class _ConversationPageState extends State<ConversationPage> {
       appBar: AppBar(
         titleSpacing: 0,
         title: GestureDetector(
-          onTap: !widget.isGroup && widget.otherUserId != null
-              ? () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ApartmentViewPage(
-                        userId: widget.otherUserId!,
-                        userName: widget.title,
+          onTap:
+              !widget.isGroup && widget.otherUserId != null
+                  ? () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder:
+                            (_) => ApartmentViewPage(
+                              userId: widget.otherUserId!,
+                              userName: widget.title,
+                            ),
                       ),
-                    ),
-                  );
-                }
-              : null,
+                    );
+                  }
+                  : null,
           child: Row(
             children: [
               CircleAvatar(
                 radius: 18,
                 backgroundColor: brandLight.withValues(alpha: 0.3),
-                backgroundImage: widget.avatarUrl != null && widget.avatarUrl!.isNotEmpty
-                    ? NetworkImage('${ApiService.baseUrl}${widget.avatarUrl}')
-                    : null,
-                child: widget.avatarUrl == null || widget.avatarUrl!.isEmpty
-                    ? Icon(
-                        widget.isGroup ? Icons.groups_rounded : Icons.person,
-                        size: 18,
-                        color: brand,
-                      )
-                    : null,
+                backgroundImage:
+                    widget.avatarUrl != null && widget.avatarUrl!.isNotEmpty
+                        ? NetworkImage(
+                          '${ApiService.baseUrl}${widget.avatarUrl}',
+                        )
+                        : null,
+                child:
+                    widget.avatarUrl == null || widget.avatarUrl!.isEmpty
+                        ? Icon(
+                          widget.isGroup ? Icons.groups_rounded : Icons.person,
+                          size: 18,
+                          color: brand,
+                        )
+                        : null,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -229,7 +244,10 @@ class _ConversationPageState extends State<ConversationPage> {
                   children: [
                     Text(
                       widget.title,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                     if (_typingUser != null)
@@ -248,30 +266,40 @@ class _ConversationPageState extends State<ConversationPage> {
         children: [
           // Messages list
           Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _messages.isEmpty
+            child:
+                _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _messages.isEmpty
                     ? Center(
-                        child: Text(
-                          'No messages yet. Say hi!',
-                          style: TextStyle(color: Colors.grey[500]),
-                        ),
-                      )
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        itemCount: _messages.length + (_loadingMore ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          if (_loadingMore && index == 0) {
-                            return const Padding(
-                              padding: EdgeInsets.all(8),
-                              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                            );
-                          }
-                          final msgIndex = _loadingMore ? index - 1 : index;
-                          return _buildBubble(_messages[msgIndex], brand, brandLight);
-                        },
+                      child: Text(
+                        'No messages yet. Say hi!',
+                        style: TextStyle(color: Colors.grey[500]),
                       ),
+                    )
+                    : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      itemCount: _messages.length + (_loadingMore ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (_loadingMore && index == 0) {
+                          return const Padding(
+                            padding: EdgeInsets.all(8),
+                            child: Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          );
+                        }
+                        final msgIndex = _loadingMore ? index - 1 : index;
+                        return _buildBubble(
+                          _messages[msgIndex],
+                          brand,
+                          brandLight,
+                        );
+                      },
+                    ),
           ),
 
           // Typing indicator bar
@@ -282,7 +310,11 @@ class _ConversationPageState extends State<ConversationPage> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   '$_typingUser is typing...',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500], fontStyle: FontStyle.italic),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
               ),
             ),
@@ -314,7 +346,10 @@ class _ConversationPageState extends State<ConversationPage> {
                         hintText: 'Type a message...',
                         filled: true,
                         fillColor: Colors.grey[100],
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                           borderSide: BorderSide.none,
@@ -349,7 +384,8 @@ class _ConversationPageState extends State<ConversationPage> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMe && widget.isGroup)
@@ -358,21 +394,21 @@ class _ConversationPageState extends State<ConversationPage> {
               child: CircleAvatar(
                 radius: 14,
                 backgroundColor: brandLight.withValues(alpha: 0.3),
-                backgroundImage: senderAvatar != null && senderAvatar.isNotEmpty
-                    ? NetworkImage('${ApiService.baseUrl}$senderAvatar')
-                    : null,
-                child: senderAvatar == null || senderAvatar.isEmpty
-                    ? Icon(Icons.person, size: 14, color: brand)
-                    : null,
+                backgroundImage:
+                    senderAvatar != null && senderAvatar.isNotEmpty
+                        ? NetworkImage('${ApiService.baseUrl}$senderAvatar')
+                        : null,
+                child:
+                    senderAvatar == null || senderAvatar.isEmpty
+                        ? Icon(Icons.person, size: 14, color: brand)
+                        : null,
               ),
             ),
           Flexible(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: isMe
-                    ? brand.withValues(alpha: 0.12)
-                    : Colors.grey[200],
+                color: isMe ? brand.withValues(alpha: 0.12) : Colors.grey[200],
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(16),
                   topRight: const Radius.circular(16),

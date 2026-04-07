@@ -99,7 +99,9 @@ class _HomeShellState extends State<HomeShell> {
           _unreadNotificationCount = data['unread_count'] as int? ?? 0;
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Failed to fetch unread count: $e');
+    }
   }
 
   Future<void> _navigateFromNotification(Map<String, dynamic> data) async {
@@ -165,7 +167,7 @@ class _HomeShellState extends State<HomeShell> {
           }
       }
     } catch (e) {
-      print("Error: $e");
+      debugPrint('Failed to navigate from notification: $e');
     }
   }
 

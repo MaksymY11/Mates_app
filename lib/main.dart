@@ -4,6 +4,7 @@ import 'package:mates/firebase_options.dart';
 import 'package:flutter/material.dart';
 import 'services/api_service.dart';
 import 'login_page.dart';
+import 'home_page.dart';
 // import 'landing_page.dart';
 
 void main() async {
@@ -16,6 +17,44 @@ void main() async {
   }
 
   runApp(const MyApp());
+}
+
+class _SplashGate extends StatefulWidget {
+  const _SplashGate();
+
+  @override
+  State<_SplashGate> createState() => _SplashGateState();
+}
+
+class _SplashGateState extends State<_SplashGate> {
+  @override
+  void initState() {
+    super.initState();
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    try {
+      await ApiService.get('/me');
+    } catch (_) {
+      if (mounted) {
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (_) => LoginPage()));
+      }
+      return;
+    }
+    if (mounted) {
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => HomeShell()));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -54,7 +93,7 @@ class MyApp extends StatelessWidget {
         ),
         iconTheme: const IconThemeData(color: brand),
       ),
-      home: LoginPage(),
+      home: const _SplashGate(),
     );
   }
 }

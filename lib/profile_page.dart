@@ -130,7 +130,9 @@ class ProfilePageState extends State<ProfilePage> {
           _vibeLabels = List<String>.from(vibe['vibe_labels'] ?? []);
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Failed to refresh vibe: $e');
+    }
 
     try {
       final history = await ScenarioService.getHistory();
@@ -139,7 +141,9 @@ class ProfilePageState extends State<ProfilePage> {
           _scenarioResponses = history['responses'] as List<dynamic>? ?? [];
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Failed to refresh scenario answer history: $e');
+    }
   }
 
   void _showImageOptions() {
@@ -415,7 +419,7 @@ class ProfilePageState extends State<ProfilePage> {
         'budget':
             _budgetCtrl.text.trim().isEmpty
                 ? null
-                : double.tryParse(_budgetCtrl.text.trim()),
+                : int.tryParse(_budgetCtrl.text.trim()),
         'bio': _aboutCtrl.text.trim().isEmpty ? null : _aboutCtrl.text.trim(),
         'state': _state,
         'move_in_date': _moveInDate?.toIso8601String(),
@@ -454,18 +458,21 @@ class ProfilePageState extends State<ProfilePage> {
 
       // Tell the server to invalidate the device and token
       if (token != null && refreshToken != null) {
-        await http.post(
-          Uri.parse('${ApiService.baseUrl}/logout'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({'refresh_token': refreshToken}),
-        );
+        await http
+            .post(
+              Uri.parse('${ApiService.baseUrl}/logout'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'Content-Type': 'application/json',
+              },
+              body: jsonEncode({'refresh_token': refreshToken}),
+            )
+            .timeout(const Duration(seconds: 5));
         await PushNotificationService.instance.unregisterDevice();
       }
-    } catch (_) {
+    } catch (e) {
       // Even if the server call fails, still remove avatar
+      debugPrint('Logout failed: $e');
       await _removeLocalAvatar();
     }
 
@@ -668,11 +675,11 @@ class ProfilePageState extends State<ProfilePage> {
                                       decoration: const InputDecoration(
                                         hintText: 'Enter your name',
                                       ),
-                                      validator:
-                                          (v) =>
-                                              (v == null || v.trim().isEmpty)
-                                                  ? 'Please enter your name'
-                                                  : null,
+                                      validator: (v) {
+                                        if (v == null || v.trim().isEmpty)
+                                          return '';
+                                        return null;
+                                      },
                                     ),
                                     const SizedBox(height: 16),
 
@@ -693,6 +700,19 @@ class ProfilePageState extends State<ProfilePage> {
                                                     const InputDecoration(
                                                       hintText: '25',
                                                     ),
+                                                validator: (v) {
+                                                  if (v == null ||
+                                                      v.trim().isEmpty)
+                                                    return 'Please enter your age';
+                                                  final n = int.tryParse(
+                                                    v.trim(),
+                                                  );
+                                                  if (n == null)
+                                                    return 'Enter a valid number';
+                                                  if (n < 18 || n > 100)
+                                                    return 'Age must be between 18 and 100';
+                                                  return null;
+                                                },
                                               ),
                                             ],
                                           ),
@@ -705,16 +725,17 @@ class ProfilePageState extends State<ProfilePage> {
                                             children: [
                                               _label('State'),
                                               DropdownButtonFormField<String>(
-                                                value: _state,
+                                                initialValue: _state,
                                                 decoration:
                                                     const InputDecoration(
                                                       hintText: 'Select state',
                                                     ),
-                                                validator:
-                                                    (v) =>
-                                                        v == null || v.isEmpty
-                                                            ? 'State is required'
-                                                            : null,
+                                                validator: (v) {
+                                                  if (v == null ||
+                                                      v.trim().isEmpty)
+                                                    return '';
+                                                  return null;
+                                                },
                                                 items:
                                                     states
                                                         .map(
@@ -788,11 +809,11 @@ class ProfilePageState extends State<ProfilePage> {
                                               size: 20,
                                             ),
                                           ),
-                                          validator:
-                                              (v) =>
-                                                  v == null || v.trim().isEmpty
-                                                      ? 'City is required'
-                                                      : null,
+                                          validator: (v) {
+                                            if (v == null || v.trim().isEmpty)
+                                              return '';
+                                            return null;
+                                          },
                                           onChanged: (v) => _cityCtrl.text = v,
                                           onFieldSubmitted:
                                               (_) => onFieldSubmitted(),
@@ -813,14 +834,25 @@ class ProfilePageState extends State<ProfilePage> {
                                               TextFormField(
                                                 controller: _budgetCtrl,
                                                 keyboardType:
-                                                    const TextInputType.numberWithOptions(
-                                                      decimal: true,
-                                                    ),
+                                                    TextInputType.number,
                                                 decoration:
                                                     const InputDecoration(
                                                       prefixText: '\$ ',
                                                       hintText: '1500',
                                                     ),
+                                                validator: (v) {
+                                                  if (v == null ||
+                                                      v.trim().isEmpty)
+                                                    return '';
+                                                  final n = int.tryParse(
+                                                    v.trim(),
+                                                  );
+                                                  if (n == null)
+                                                    return 'Please enter a valid amount';
+                                                  if (n < 0 || n > 50000)
+                                                    return 'Budget must be between \$0 and \$50,000';
+                                                  return null;
+                                                },
                                               ),
                                             ],
                                           ),
@@ -861,6 +893,12 @@ class ProfilePageState extends State<ProfilePage> {
                                                           _fmtDate(picked);
                                                     });
                                                   }
+                                                },
+                                                validator: (v) {
+                                                  if (v == null ||
+                                                      v.trim().isEmpty)
+                                                    return '';
+                                                  return null;
                                                 },
                                               ),
                                             ],
