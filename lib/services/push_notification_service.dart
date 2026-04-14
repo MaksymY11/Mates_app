@@ -36,7 +36,7 @@ class PushNotificationService {
 
       _initialized = true;
     } catch (e) {
-      print('[PUSH] Initialization failed: $e');
+      debugPrint('[PUSH] Initialization failed: $e');
     }
   }
 
@@ -63,7 +63,7 @@ class PushNotificationService {
         body: {'fcm_token': fcmToken, 'platform': platform},
       );
     } catch (e) {
-      print("[PUSH] Register failed: $e");
+      debugPrint("[PUSH] Register failed: $e");
     }
   }
 
@@ -76,7 +76,7 @@ class PushNotificationService {
         body: {'fcm_token': fcmToken},
       );
     } catch (e) {
-      print("[PUSH] Unregister failed: $e");
+      debugPrint("[PUSH] Unregister failed: $e");
     }
   }
 }
