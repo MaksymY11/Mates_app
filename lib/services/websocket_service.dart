@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:mates/verify_email_page.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'api_service.dart';
 
@@ -55,10 +57,25 @@ class WebSocketService {
           _controller.add(decoded);
         } catch (_) {}
       },
-      onDone: () {
+      onDone: () async {
         if (_channel?.closeCode == 4001) {
-          // Auth failure — redirect to login, don't reconnect
+          // Auth failure: redirect to login, don't reconnect
           ApiService.handleUnauthorized();
+          return;
+        }
+        if (_channel?.closeCode == 4003) {
+          // Email is not verified: redirect to VerifyEmailPage
+          _intentionalClose = true;
+          try {
+            final me = await ApiService.get('/me');
+            final email = me['email'] as String;
+            ApiService.navigatorKey.currentState?.pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => VerifyEmailPage(email: email)),
+              (route) => false,
+            );
+          } catch (_) {
+            ApiService.handleUnauthorized();
+          }
           return;
         }
         if (!_intentionalClose) {

@@ -3,6 +3,8 @@ import 'signup_page.dart';
 import 'services/auth_service.dart';
 import 'utils/validators.dart';
 import 'home_page.dart';
+import 'forgot_password_page.dart';
+import 'verify_email_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -30,14 +32,20 @@ class _LoginPageState extends State<LoginPage> {
 
     setState(() => _loading = true);
     try {
-      await AuthService.loginUser(
+      final verified = await AuthService.loginUser(
         _emailController.text,
         _passwordController.text,
       );
 
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeShell()),
+        MaterialPageRoute(
+          builder:
+              (_) =>
+                  verified
+                      ? const HomeShell()
+                      : VerifyEmailPage(email: _emailController.text),
+        ),
         (route) => false,
       );
     } catch (e) {
@@ -130,9 +138,28 @@ class _LoginPageState extends State<LoginPage> {
                           borderSide: BorderSide.none,
                         ),
                       ),
-                      validator: Validators.validatePassword,
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 4),
+
+                    // Forgot password link
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ForgotPasswordPage(),
+                            ),
+                          );
+                        },
+                        child: const Text(
+                          'Forgot password?',
+                          style: TextStyle(color: Colors.black),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
 
                     // Continue button (log in)
                     Row(
