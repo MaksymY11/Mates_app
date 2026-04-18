@@ -1,12 +1,15 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:mates/services/auth_service.dart';
 import 'services/push_notification_service.dart';
-import 'package:mates/firebase_options.dart';
+import 'firebase_options.dart';
 import 'package:flutter/material.dart';
 import 'services/api_service.dart';
 import 'login_page.dart';
 import 'home_page.dart';
 // import 'landing_page.dart';
 
+/// App entry point. Initializes Flutter bindings, conditionally boots Firebase on platforms that support FCM
+/// (Android/iOS/web — desktop is skipped to avoid native plugin crashes), then mounts [MyApp].
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -19,6 +22,9 @@ void main() async {
   runApp(const MyApp());
 }
 
+/// Startup gate shown briefly on cold launch while [_checkAuth] decides where to route the user.
+/// Fetches /me with the stored token and navigates to [HomeShell] (verified) or [LoginPage] (unverified,
+/// unauthenticated, or error).
 class _SplashGate extends StatefulWidget {
   const _SplashGate();
 
@@ -33,24 +39,37 @@ class _SplashGateState extends State<_SplashGate> {
     _checkAuth();
   }
 
+  // Probes /me with the stored access token to decide startup routing. Verified users land on [HomeShell].
+  /// Unverified users (abandoned mid-verification) are logged out and sent to [LoginPage], reopening the app
+  /// after a break shouldn't drop them mid-flow. Any failure (no token, expired, network error) also routes to
+  /// [LoginPage]. All navigation uses pushReplacement so the splash never stays in the back stack.
   Future<void> _checkAuth() async {
     try {
-      await ApiService.get('/me');
+      final me = await ApiService.get('/me');
+
+      if (mounted) {
+        if (me['email_verified'] == true) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeShell()),
+          );
+        } else {
+          await AuthService.logout();
+          if (!mounted) return;
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const LoginPage()),
+          );
+        }
+      }
     } catch (_) {
       if (mounted) {
         Navigator.of(
           context,
-        ).pushReplacement(MaterialPageRoute(builder: (_) => LoginPage()));
+        ).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
       }
-      return;
-    }
-    if (mounted) {
-      Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => HomeShell()));
     }
   }
 
+  /// Placeholder UI displayed while [_checkAuth] runs: a centered spinner. Replaced immediately once routing completes.
   @override
   Widget build(BuildContext context) {
     return const Scaffold(body: Center(child: CircularProgressIndicator()));

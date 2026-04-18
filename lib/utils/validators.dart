@@ -9,22 +9,4 @@ class Validators {
     }
     return null;
   }
-
-  static String? validatePassword(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Please create a password';
-    }
-    if (value.length < 8) {
-      return 'Password must be at least 8 characters';
-    }
-    final upper = RegExp(r'[A-Z]');
-    final lower = RegExp(r'[a-z]');
-    final digit = RegExp(r'\d');
-    if (!upper.hasMatch(value) ||
-        !lower.hasMatch(value) ||
-        !digit.hasMatch(value)) {
-      return 'Use uppercase, lowercase letters, and numbers';
-    }
-    return null;
-  }
 }

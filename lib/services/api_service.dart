@@ -117,7 +117,7 @@ class ApiService {
         )
         .timeout(const Duration(seconds: 30));
 
-    if (res.statusCode == 401) {
+    if (res.statusCode == 401 && requiresAuth) {
       final refreshed = await _tryRefresh();
       if (!refreshed) {
         await handleUnauthorized();

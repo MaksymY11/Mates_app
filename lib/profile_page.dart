@@ -1,13 +1,12 @@
 // lib/profile_page.dart
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mates/login_page.dart';
+import 'package:mates/services/auth_service.dart';
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'services/push_notification_service.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/api_service.dart';
 import 'services/vibe_service.dart';
@@ -17,6 +16,9 @@ import 'utils/us_cities.dart';
 const Color kBrand = Color(0xFF4CAF50);
 const Color kBrandLight = Color(0xFF7CFF7C);
 
+/// User profile page accessed via the gear icon in HomeShell's app bar. Displays and edits read-write profile fields (name, age,
+/// city, state, budget, move-in date, about), reads-only vibe labels and scenario responses, and hosts the avatar picker and logout
+/// action.
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
   @override
@@ -24,7 +26,6 @@ class ProfilePage extends StatefulWidget {
 }
 
 class ProfilePageState extends State<ProfilePage> {
-  // Controllers
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController(); // display-only
   final _ageCtrl = TextEditingController();
@@ -146,6 +147,19 @@ class ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _emailCtrl.dispose();
+    _ageCtrl.dispose();
+    _cityCtrl.dispose();
+    _budgetCtrl.dispose();
+    _aboutCtrl.dispose();
+    _moveInCtrl.dispose();
+    super.dispose();
+  }
+
+  /// Bottom sheet offering gallery / camera / remove actions for the avatar.
   void _showImageOptions() {
     showModalBottomSheet(
       context: context,
@@ -190,18 +204,7 @@ class ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _emailCtrl.dispose();
-    _ageCtrl.dispose();
-    _cityCtrl.dispose();
-    _budgetCtrl.dispose();
-    _aboutCtrl.dispose();
-    _moveInCtrl.dispose();
-    super.dispose();
-  }
-
+  /// Loads the authenticated user's profile from the backend and populates controllers. Also kicks off vibe and scenario fetches.
   Future<void> _loadProfile() async {
     setState(() => _loading = true);
     try {
@@ -275,6 +278,7 @@ class ProfilePageState extends State<ProfilePage> {
     } catch (_) {}
   }
 
+  /// Opens the system image picker, uploads the chosen image, and updates the local avatar preview.
   Future<void> _pickFromGallery() async {
     try {
       final XFile? file = await _picker.pickImage(
@@ -306,6 +310,7 @@ class ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  /// Captures a photo with the device camera, uploads it, and updates the local avatar preview.
   Future<void> _pickFromCamera() async {
     try {
       final XFile? file = await _picker.pickImage(
@@ -336,6 +341,8 @@ class ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  /// Persists the avatar bytes to the app's documents directory and records the path in SharedPreferences so the UI can show it
+  /// instantly on next launch before the network fetch returns.
   Future<void> _saveAvatarLocally(Uint8List bytes) async {
     try {
       final dir = await getApplicationDocumentsDirectory();
@@ -352,6 +359,7 @@ class ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  /// Reads the cached avatar from the path stored in SharedPreferences, if present. Silently skips if missing or unreadable.
   Future<void> _loadLocalAvatar() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -367,6 +375,7 @@ class ProfilePageState extends State<ProfilePage> {
     } catch (_) {}
   }
 
+  /// Deletes the cached avatar file and clears the SharedPreferences entry. Safe to call when no avatar is cached.
   Future<void> _removeLocalAvatar() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -386,6 +395,7 @@ class ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  /// Uploads raw image bytes to /uploadAvatar and returns the server-provided avatar URL.
   Future<String> uploadAvatar(Uint8List bytes) async {
     final j = await ApiService.uploadFile(
       '/uploadAvatar',
@@ -400,6 +410,7 @@ class ProfilePageState extends State<ProfilePage> {
     return j['avatar_url'] as String? ?? '';
   }
 
+  /// Validates the form and PATCHes the user's editable profile fields. Surfaces errors via snackbar.
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
@@ -450,34 +461,17 @@ class ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  /// Clears the local avatar cache, unregisters the FCM token, invalidates the session via AuthService.logout(), and navigates to
+  /// LoginPage. Device/avatar cleanup failures are logged but don't block logout.
   Future<void> _logout() async {
     try {
       await _removeLocalAvatar();
-      final token = await ApiService.getToken();
-      final refreshToken = await ApiService.getToken(key: 'refresh_token');
-
-      // Tell the server to invalidate the device and token
-      if (token != null && refreshToken != null) {
-        await http
-            .post(
-              Uri.parse('${ApiService.baseUrl}/logout'),
-              headers: {
-                'Authorization': 'Bearer $token',
-                'Content-Type': 'application/json',
-              },
-              body: jsonEncode({'refresh_token': refreshToken}),
-            )
-            .timeout(const Duration(seconds: 5));
-        await PushNotificationService.instance.unregisterDevice();
-      }
+      await PushNotificationService.instance.unregisterDevice();
     } catch (e) {
-      // Even if the server call fails, still remove avatar
       debugPrint('Logout failed: $e');
-      await _removeLocalAvatar();
     }
 
-    await ApiService.clearToken();
-    await ApiService.clearToken(key: 'refresh_token');
+    await AuthService.logout();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const LoginPage()),
