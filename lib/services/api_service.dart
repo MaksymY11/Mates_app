@@ -11,7 +11,7 @@ import '../login_page.dart';
 class ApiService {
   static final String baseUrl =
       kIsWeb
-          ? 'https://api.findmates.net'
+          ? (kDebugMode ? 'http://localhost:8000' : 'https://api.findmates.net')
           : Platform.isAndroid
           ? 'http://10.0.2.2:8000'
           : 'http://localhost:8000';
@@ -19,7 +19,9 @@ class ApiService {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
 
-  static const _storage = FlutterSecureStorage();
+  static const _storage = FlutterSecureStorage(
+    webOptions: WebOptions.defaultOptions,
+  );
   static Completer<bool>? _refreshCompleter;
 
   /// Stores the JWT access token in secure storage.
