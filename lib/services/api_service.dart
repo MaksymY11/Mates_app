@@ -11,7 +11,7 @@ import '../login_page.dart';
 class ApiService {
   static final String baseUrl =
       kIsWeb
-          ? 'https://mates-backend-dxma.onrender.com'
+          ? 'https://api.findmates.net'
           : Platform.isAndroid
           ? 'http://10.0.2.2:8000'
           : 'http://localhost:8000';
